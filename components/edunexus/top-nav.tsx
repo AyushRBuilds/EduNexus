@@ -23,8 +23,10 @@ const roleConfig: Record<UserRole, { label: string; color: string; bgColor: stri
 
 export function TopNav({
   onSearch,
+  onProfileClick,
 }: {
   onSearch: (query: string) => void
+  onProfileClick?: () => void
 }) {
   const { user, logout } = useAuth()
   const [navSearch, setNavSearch] = useState("")
@@ -92,12 +94,18 @@ export function TopNav({
             <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
           </div>
 
-          {/* User Avatar */}
-          <Avatar className="h-8 w-8 cursor-pointer border border-border">
-            <AvatarFallback className="bg-primary/20 text-xs text-primary font-medium">
-              {user?.avatar ?? "EN"}
-            </AvatarFallback>
-          </Avatar>
+          {/* User Avatar — opens profile panel */}
+          <button
+            onClick={onProfileClick}
+            className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-transform hover:scale-105 active:scale-95"
+            aria-label="Open profile"
+          >
+            <Avatar className="h-8 w-8 cursor-pointer border border-border hover:border-primary/50 transition-colors">
+              <AvatarFallback className="bg-primary/20 text-xs text-primary font-medium">
+                {user?.avatar ?? "EN"}
+              </AvatarFallback>
+            </Avatar>
+          </button>
 
           <Button
             variant="ghost"

@@ -7,19 +7,21 @@ import { TopNav } from "@/components/edunexus/top-nav"
 import { AppSidebar, MobileBottomNav, type ViewId } from "@/components/edunexus/app-sidebar"
 import { HeroSearch } from "@/components/edunexus/hero-search"
 import { SearchResults } from "@/components/edunexus/search-results"
-import { KnowledgeGraph } from "@/components/edunexus/knowledge-graph"
 import { TrendingSection } from "@/components/edunexus/trending-section"
 import { FacultyMode } from "@/components/edunexus/faculty-mode"
 import { ResearchCollab } from "@/components/edunexus/research-collab"
 import { AdminDashboard } from "@/components/edunexus/admin-dashboard"
 import { StudyWorkspace } from "@/components/edunexus/study-workspace"
 import { SubjectsView } from "@/components/edunexus/subjects-view"
+import { NotificationsView } from "@/components/edunexus/notifications-view"
+import { ProfilePanel } from "@/components/edunexus/profile-panel"
 
 export default function EduNexusPage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
   const [activeView, setActiveView] = useState<ViewId>("search")
   const [searchQuery, setSearchQuery] = useState("")
   const [hasSearched, setHasSearched] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
 
   // Show login if not authenticated
   if (!isAuthenticated || !user) {
@@ -40,8 +42,8 @@ export default function EduNexusPage() {
 
   const isStudyMode = activeView === "study"
 
-  // Study mode: fully immersive, no sidebar/topnav/footer
-  if (isStudyMode) {
+  // Study mode: fully immersive, no sidebar/topnav/footer (students only)
+  if (isStudyMode && userRole === "student") {
     return (
       <div className="flex h-screen flex-col bg-background overflow-hidden">
         <StudyWorkspace onBack={() => setActiveView("search")} />
@@ -51,7 +53,7 @@ export default function EduNexusPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background bg-grid">
-      <TopNav onSearch={handleSearch} />
+      <TopNav onSearch={handleSearch} onProfileClick={() => setProfileOpen(true)} />
 
       <div className="flex flex-1">
         <AppSidebar
@@ -66,16 +68,8 @@ export default function EduNexusPage() {
             <>
               {!hasSearched && <HeroSearch onSearch={handleSearch} />}
               {hasSearched && <SearchResults query={searchQuery} />}
-              {hasSearched && <KnowledgeGraph query={searchQuery} />}
               {!hasSearched && <TrendingSection onSearch={handleSearch} />}
             </>
-          )}
-
-          {/* Knowledge Graph View */}
-          {activeView === "graph" && (
-            <div className="pt-8">
-              <KnowledgeGraph query={searchQuery || "Laplace Transform"} />
-            </div>
           )}
 
           {/* Research Repository View */}
@@ -96,6 +90,13 @@ export default function EduNexusPage() {
           {activeView === "subjects" && (
             <div className="pt-8">
               <SubjectsView userRole={userRole} />
+            </div>
+          )}
+
+          {/* Notifications View */}
+          {activeView === "notifications" && (
+            <div className="pt-8">
+              <NotificationsView userRole={userRole} />
             </div>
           )}
 
@@ -135,6 +136,14 @@ export default function EduNexusPage() {
         activeView={activeView}
         onNavigate={handleNavigate}
         userRole={userRole}
+      />
+
+      {/* Profile slide-over panel */}
+      <ProfilePanel
+        user={user}
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onLogout={logout}
       />
     </div>
   )

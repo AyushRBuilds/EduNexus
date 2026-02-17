@@ -3,7 +3,6 @@
 import { useState } from "react"
 import {
   Search,
-  Network,
   BookOpen,
   GraduationCap,
   Handshake,
@@ -14,6 +13,7 @@ import {
   Sparkles,
   MonitorPlay,
   Library,
+  Bell,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserRole } from "./auth-context"
@@ -28,17 +28,17 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   { icon: Search, label: "Smart Search", id: "search", roles: ["student", "faculty", "admin"], color: "text-sky-400" },
-  { icon: Network, label: "Knowledge Graph", id: "graph", roles: ["student", "faculty", "admin"], color: "text-emerald-400" },
   { icon: BookOpen, label: "Research Repo", id: "research", roles: ["student", "faculty", "admin"], color: "text-orange-400" },
   { icon: Handshake, label: "Research Collab", id: "collab", roles: ["student", "faculty", "admin"], color: "text-pink-400" },
   { icon: Library, label: "Subjects", id: "subjects", roles: ["student", "faculty", "admin"], color: "text-lime-400" },
-  { icon: MonitorPlay, label: "Study Mode", id: "study", roles: ["student", "faculty", "admin"], color: "text-cyan-400" },
+  { icon: MonitorPlay, label: "Study Mode", id: "study", roles: ["student"], color: "text-cyan-400" },
+  { icon: Bell, label: "Notifications", id: "notifications", roles: ["student", "faculty", "admin"], color: "text-rose-400" },
   { icon: TrendingUp, label: "Trending", id: "trending", roles: ["student", "faculty", "admin"], color: "text-yellow-400" },
   { icon: GraduationCap, label: "Faculty Studio", id: "faculty", roles: ["faculty", "admin"], color: "text-indigo-400" },
   { icon: LayoutDashboard, label: "Admin Panel", id: "admin", roles: ["admin"], color: "text-amber-400" },
 ]
 
-export type ViewId = "search" | "graph" | "research" | "collab" | "subjects" | "study" | "trending" | "faculty" | "admin"
+export type ViewId = "search" | "research" | "collab" | "subjects" | "study" | "notifications" | "trending" | "faculty" | "admin"
 
 export function AppSidebar({
   activeView,
