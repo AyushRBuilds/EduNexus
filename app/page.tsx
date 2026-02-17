@@ -17,6 +17,7 @@ import { ResearchHub } from "@/components/edunexus/research-hub"
 
 import { ProfilePanel } from "@/components/edunexus/profile-panel"
 import { EduNexusLogo } from "@/components/edunexus/edunexus-logo"
+import { InitAnimation } from "@/components/edunexus/init-animation"
 
 export default function EduNexusPage() {
   const { user, isAuthenticated, logout } = useAuth()
@@ -24,6 +25,12 @@ export default function EduNexusPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [hasSearched, setHasSearched] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [initDone, setInitDone] = useState(false)
+
+  // Show initialization animation on first load
+  if (!initDone) {
+    return <InitAnimation onComplete={() => setInitDone(true)} />
+  }
 
   // Show login if not authenticated
   if (!isAuthenticated || !user) {
