@@ -514,7 +514,7 @@ export function ProfilePanel({
                     <AlertDialogCancel className="border-border/50">Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={onLogout}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      className="bg-destructive !text-white hover:bg-destructive/90 font-semibold"
                     >
                       Sign Out
                     </AlertDialogAction>

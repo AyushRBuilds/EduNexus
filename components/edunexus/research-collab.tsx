@@ -267,7 +267,7 @@ function DeleteConfirm({ title, onConfirm, onCancel }: { title: string; onConfir
         </p>
         <div className="flex gap-3">
           <Button variant="ghost" onClick={onCancel} className="flex-1 rounded-xl">Cancel</Button>
-          <Button onClick={onConfirm} className="flex-1 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90">
+          <Button onClick={onConfirm} className="flex-1 rounded-xl bg-destructive !text-white hover:bg-destructive/90 font-semibold">
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
           </Button>

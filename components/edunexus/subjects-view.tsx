@@ -709,7 +709,7 @@ function DeleteConfirmDialog({
           </Button>
           <Button
             onClick={onConfirm}
-            className="bg-destructive/15 text-destructive hover:bg-destructive/25 gap-1.5"
+            className="bg-destructive !text-white hover:bg-destructive/90 font-semibold gap-1.5"
           >
             <Trash2 className="h-4 w-4" />
             Remove
