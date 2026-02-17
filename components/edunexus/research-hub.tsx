@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { EduNexusLogo } from "./edunexus-logo"
 
 /* ---------- Types ---------- */
 type Department =
@@ -476,13 +477,20 @@ function GoogleScholarFallback({ query }: { query: string }) {
   const scholarUrl = `https://scholar.google.com/scholar?q=${encodeURIComponent(query)}`
 
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary/30 border border-border/40 mb-4">
-        <Search className="h-7 w-7 text-muted-foreground/40" />
+    <div className="glass rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 mb-5">
+        <EduNexusLogo size={36} />
       </div>
-      <h3 className="text-base font-semibold text-foreground mb-1">No papers found in our repository</h3>
-      <p className="text-sm text-muted-foreground max-w-md mb-5">
-        {"We couldn't find research papers matching your search in our institutional repository. You can explore Google Scholar for papers across global academic databases."}
+      <h3 className="text-base font-semibold text-foreground mb-1.5">
+        {"No matching papers in institutional repository"}
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-md mb-2 leading-relaxed">
+        {"Your search for "}
+        <span className="font-medium text-foreground">{`"${query}"`}</span>
+        {" didn't match any papers in our institutional database."}
+      </p>
+      <p className="text-xs text-muted-foreground/70 max-w-sm mb-6">
+        {"Try different keywords or explore Google Scholar to find papers across global academic databases."}
       </p>
       <a
         href={scholarUrl}
@@ -490,12 +498,15 @@ function GoogleScholarFallback({ query }: { query: string }) {
         rel="noopener noreferrer"
         className="inline-flex"
       >
-        <Button className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
+        <Button className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-5">
           <ExternalLink className="h-4 w-4" />
-          Search on Google Scholar
+          {"Search \"" + query + "\" on Google Scholar"}
         </Button>
       </a>
-      <p className="mt-3 text-[11px] text-muted-foreground/50">Opens in a new tab</p>
+      <p className="mt-3 text-[11px] text-muted-foreground/50 flex items-center gap-1">
+        <ArrowUpRight className="h-3 w-3" />
+        Opens scholar.google.com in a new tab
+      </p>
     </div>
   )
 }
@@ -573,7 +584,7 @@ export function ResearchHub() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
+            <EduNexusLogo size={22} />
             Institutional Research Hub
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
