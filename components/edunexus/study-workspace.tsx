@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { StudyMindMap } from "./study-mind-map"
 
 /* ------------------------------------------------------------------ */
@@ -590,63 +591,75 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* Split-screen content */}
-      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-        {/* Left Panel — Video + Transcript (60%) */}
-        <div className="flex w-full flex-col overflow-hidden lg:w-[60%] border-r border-border/40">
-          <div className="flex-1 overflow-y-auto p-4">
-            <VideoPlayer
-              currentTime={currentTime}
-              isPlaying={isPlaying}
-              isMuted={isMuted}
-              onPlayPause={() => setIsPlaying((p) => !p)}
-              onMute={() => setIsMuted((m) => !m)}
-              onSeek={handleSeek}
-              onSkip={handleSkip}
-            />
-          </div>
-          <TranscriptPanel currentTime={currentTime} onSeek={handleSeek} />
-        </div>
-
-        {/* Right Panel — AI Sidebar (40%) */}
-        <div className="flex w-full flex-col overflow-hidden bg-card/30 lg:w-[40%]">
-          <Tabs defaultValue="mindmap" className="flex h-full flex-col">
-            <div className="border-b border-border/60 px-2 pt-2">
-              <TabsList className="w-full bg-secondary/30 h-9">
-                <TabsTrigger value="chat" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Instant Chat</span>
-                  <span className="sm:hidden">Chat</span>
-                </TabsTrigger>
-                <TabsTrigger value="summary" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
-                  <FileText className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Key Summary</span>
-                  <span className="sm:hidden">Summary</span>
-                </TabsTrigger>
-                <TabsTrigger value="mindmap" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none relative">
-                  <Network className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Mind Map</span>
-                  <span className="sm:hidden">Map</span>
-                  {/* Glow indicator for Mind Map when active */}
-                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary animate-pulse" />
-                </TabsTrigger>
-              </TabsList>
+      {/* Split-screen content — resizable */}
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="flex-1 overflow-hidden"
+      >
+        {/* Left Panel — Video + Transcript */}
+        <ResizablePanel defaultSize={60} minSize={30} maxSize={80}>
+          <div className="flex h-full flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4">
+              <VideoPlayer
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                isMuted={isMuted}
+                onPlayPause={() => setIsPlaying((p) => !p)}
+                onMute={() => setIsMuted((m) => !m)}
+                onSeek={handleSeek}
+                onSkip={handleSkip}
+              />
             </div>
+            <TranscriptPanel currentTime={currentTime} onSeek={handleSeek} />
+          </div>
+        </ResizablePanel>
 
-            <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
-              <ChatTab />
-            </TabsContent>
+        {/* Drag handle */}
+        <ResizableHandle
+          withHandle
+          className="bg-border/30 transition-colors hover:bg-primary/20 data-[resize-handle-active]:bg-primary/40 [&>div]:border-border/50 [&>div]:bg-secondary/60 [&>div]:hover:bg-primary/30"
+        />
 
-            <TabsContent value="summary" className="flex-1 overflow-hidden mt-0">
-              <SummaryTab />
-            </TabsContent>
+        {/* Right Panel — AI Sidebar */}
+        <ResizablePanel defaultSize={40} minSize={25} maxSize={65}>
+          <div className="flex h-full flex-col overflow-hidden bg-card/30">
+            <Tabs defaultValue="mindmap" className="flex h-full flex-col">
+              <div className="border-b border-border/60 px-2 pt-2">
+                <TabsList className="w-full bg-secondary/30 h-9">
+                  <TabsTrigger value="chat" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Instant Chat</span>
+                    <span className="sm:hidden">Chat</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="summary" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Key Summary</span>
+                    <span className="sm:hidden">Summary</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="mindmap" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none relative">
+                    <Network className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Mind Map</span>
+                    <span className="sm:hidden">Map</span>
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-            <TabsContent value="mindmap" className="flex-1 overflow-hidden mt-0">
-              <StudyMindMap />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+              <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
+                <ChatTab />
+              </TabsContent>
+
+              <TabsContent value="summary" className="flex-1 overflow-hidden mt-0">
+                <SummaryTab />
+              </TabsContent>
+
+              <TabsContent value="mindmap" className="flex-1 overflow-hidden mt-0">
+                <StudyMindMap />
+              </TabsContent>
+            </Tabs>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   )
 }

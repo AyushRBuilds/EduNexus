@@ -42,7 +42,7 @@ export default function EduNexusPage() {
   // Study mode: fully immersive, no sidebar/topnav/footer
   if (isStudyMode) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
+      <div className="flex h-screen flex-col bg-background overflow-hidden">
         <StudyWorkspace onBack={() => setActiveView("search")} />
       </div>
     )
