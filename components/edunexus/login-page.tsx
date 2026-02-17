@@ -79,15 +79,18 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background bg-grid relative overflow-hidden">
       {/* Theme toggle - top right */}
-      {mounted && (
-        <button
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          aria-label="Toggle theme"
-        >
-          {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </button>
-      )}
+      <button
+        onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+        className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+        aria-label="Toggle theme"
+        suppressHydrationWarning
+      >
+        {mounted ? (
+          resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+      </button>
 
       {/* Background glow orbs */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
@@ -114,7 +117,7 @@ export function LoginPage() {
             Your role is automatically detected from your credentials
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-secondary-foreground mb-1.5">
                 Email
@@ -127,6 +130,7 @@ export function LoginPage() {
                 placeholder="you@university.edu.in"
                 className="w-full h-11 px-4 rounded-xl bg-secondary/50 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
                 required
+                suppressHydrationWarning
               />
             </div>
 
@@ -143,12 +147,14 @@ export function LoginPage() {
                   placeholder="Enter your password"
                   className="w-full h-11 px-4 pr-11 rounded-xl bg-secondary/50 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
                   required
+                  suppressHydrationWarning
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  suppressHydrationWarning
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -165,6 +171,7 @@ export function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              suppressHydrationWarning
             >
               {loading ? (
                 <>

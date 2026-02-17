@@ -292,21 +292,24 @@ export function TopNav({
           )}
 
           {/* Theme toggle */}
-          {mounted && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-              aria-label="Toggle theme"
-            >
-              {resolvedTheme === "dark" ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+            aria-label="Toggle theme"
+            suppressHydrationWarning
+          >
+            {mounted ? (
+              resolvedTheme === "dark" ? (
                 <Sun className="h-4 w-4" />
               ) : (
                 <Moon className="h-4 w-4" />
-              )}
-            </Button>
-          )}
+              )
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
+          </Button>
 
           {/* Bell — Notification toggle */}
           <div className="relative" ref={panelRef}>

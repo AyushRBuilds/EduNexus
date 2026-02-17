@@ -623,32 +623,33 @@ export function ResearchHub() {
         ))}
       </div>
 
-      {/* Search + Filters */}
-      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Research Hub Search Bar — always visible above featured section */}
+      <div className="glass rounded-2xl p-4 mb-6">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search papers, authors, topics..."
+            placeholder="Search papers, authors, topics, journals..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 rounded-xl border border-border bg-secondary/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+            className="w-full h-11 rounded-xl border border-border bg-secondary/40 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        {/* Filters row */}
+        <div className="flex gap-2 flex-wrap mt-3">
           <select
             value={department}
             onChange={(e) => setDepartment(e.target.value as Department)}
-            className="h-10 rounded-xl border border-border bg-secondary/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-9 rounded-xl border border-border bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           >
             {ALL_DEPARTMENTS.map((d) => (
               <option key={d} value={d}>{d === "All" ? "All Departments" : d}</option>
@@ -658,7 +659,7 @@ export function ResearchHub() {
           <select
             value={authorFilter}
             onChange={(e) => setAuthorFilter(e.target.value as AuthorType | "all")}
-            className="h-10 rounded-xl border border-border bg-secondary/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-9 rounded-xl border border-border bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           >
             <option value="all">All Authors</option>
             <option value="faculty">Faculty</option>
@@ -669,7 +670,7 @@ export function ResearchHub() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="h-10 rounded-xl border border-border bg-secondary/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="h-9 rounded-xl border border-border bg-secondary/50 px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           >
             {sortOptions.map((opt) => (
               <option key={opt.id} value={opt.id}>{opt.label}</option>
