@@ -13,6 +13,7 @@ import { FacultyMode } from "@/components/edunexus/faculty-mode"
 import { ResearchCollab } from "@/components/edunexus/research-collab"
 import { AdminDashboard } from "@/components/edunexus/admin-dashboard"
 import { StudyWorkspace } from "@/components/edunexus/study-workspace"
+import { SubjectsView } from "@/components/edunexus/subjects-view"
 
 export default function EduNexusPage() {
   const { user, isAuthenticated } = useAuth()
@@ -88,6 +89,13 @@ export default function EduNexusPage() {
           {activeView === "collab" && (
             <div className="pt-8">
               <ResearchCollab userRole={userRole} />
+            </div>
+          )}
+
+          {/* Subjects View */}
+          {activeView === "subjects" && (
+            <div className="pt-8">
+              <SubjectsView userRole={userRole} />
             </div>
           )}
 
