@@ -14,7 +14,7 @@ import { AdminDashboard } from "@/components/edunexus/admin-dashboard"
 import { StudyWorkspace } from "@/components/edunexus/study-workspace"
 import { SubjectsView } from "@/components/edunexus/subjects-view"
 import { ResearchHub } from "@/components/edunexus/research-hub"
-import { NotificationsView } from "@/components/edunexus/notifications-view"
+
 import { ProfilePanel } from "@/components/edunexus/profile-panel"
 
 export default function EduNexusPage() {
@@ -91,13 +91,6 @@ export default function EduNexusPage() {
           {activeView === "subjects" && (
             <div className="pt-8">
               <SubjectsView userRole={userRole} />
-            </div>
-          )}
-
-          {/* Notifications View */}
-          {activeView === "notifications" && (
-            <div className="pt-8">
-              <NotificationsView userRole={userRole} />
             </div>
           )}
 
