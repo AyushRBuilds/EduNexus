@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
+import { EduNexusLogo } from "./edunexus-logo"
 import {
   Upload,
   FileText,
@@ -76,7 +76,7 @@ function UploadPanel() {
 
       {/* AI Preview */}
       <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
-        <Image src="/images/logo.png" alt="" width={16} height={16} className="mt-0.5 shrink-0 object-contain logo-blend" />
+        <EduNexusLogo size={16} className="mt-0.5" />
         <div>
           <p className="text-xs font-medium text-foreground">
             AI Auto-Index Preview

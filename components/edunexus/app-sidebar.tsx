@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
+import { EduNexusLogo } from "./edunexus-logo"
 import {
   Search,
   BookOpen,
@@ -63,8 +63,8 @@ export function AppSidebar({
         "flex items-center gap-2.5 border-b border-border/40 px-4 h-16 shrink-0",
         collapsed && "justify-center px-0"
       )}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-          <Image src="/images/logo.png" alt="EduNexus" width={36} height={36} className="object-contain logo-blend" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+          <EduNexusLogo size={32} />
         </div>
         {!collapsed && (
           <div className="flex flex-col overflow-hidden">

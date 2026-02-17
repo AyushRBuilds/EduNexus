@@ -16,6 +16,7 @@ import { SubjectsView } from "@/components/edunexus/subjects-view"
 import { ResearchHub } from "@/components/edunexus/research-hub"
 
 import { ProfilePanel } from "@/components/edunexus/profile-panel"
+import { EduNexusLogo } from "@/components/edunexus/edunexus-logo"
 
 export default function EduNexusPage() {
   const { user, isAuthenticated, logout } = useAuth()
@@ -118,7 +119,7 @@ export default function EduNexusPage() {
           {/* Footer */}
           <footer className="border-t border-border px-4 py-6">
             <div className="flex items-center justify-center gap-2">
-              <img src="/images/logo.png" alt="EduNexus" width={20} height={20} className="object-contain logo-blend" />
+              <EduNexusLogo size={18} />
               <p className="text-xs text-muted-foreground">
                 EduNexus &mdash; A Unified AI Knowledge Infrastructure for Smart
                 Campuses

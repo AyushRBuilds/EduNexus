@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
+import { useState, useEffect } from "react"
 import { useAuth } from "./auth-context"
-import { Eye, EyeOff, Loader2, GraduationCap, BookOpen, Shield } from "lucide-react"
+import { useTheme } from "next-themes"
+import { Eye, EyeOff, Loader2, GraduationCap, BookOpen, Shield, Sun, Moon } from "lucide-react"
+import { EduNexusLogo } from "./edunexus-logo"
 
 const DEMO_ACCOUNTS = [
   {
@@ -40,11 +41,15 @@ const DEMO_ACCOUNTS = [
 
 export function LoginPage() {
   const { login } = useAuth()
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +78,17 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background bg-grid relative overflow-hidden">
+      {/* Theme toggle - top right */}
+      {mounted && (
+        <button
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          aria-label="Toggle theme"
+        >
+          {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+      )}
+
       {/* Background glow orbs */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-accent/5 blur-[100px] pointer-events-none" />
@@ -81,11 +97,7 @@ export function LoginPage() {
         {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="relative">
-              <div className="w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center">
-                <Image src="/images/logo.png" alt="EduNexus" width={56} height={56} className="object-contain logo-blend" />
-              </div>
-            </div>
+            <EduNexusLogo size={48} />
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
               EduNexus
             </h1>

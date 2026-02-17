@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
+import { EduNexusLogo } from "./edunexus-logo"
 import {
   BookOpen,
   FileText,
@@ -36,8 +36,8 @@ function AISynthesisCard({ query }: { query: string }) {
     <div className="glass rounded-2xl p-6 glow-sm">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-            <Image src="/images/logo.png" alt="EduNexus AI" width={40} height={40} className="object-contain logo-blend" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <EduNexusLogo size={28} />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">

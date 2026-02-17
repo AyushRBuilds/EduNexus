@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import Image from "next/image"
+import { EduNexusLogo } from "./edunexus-logo"
 import {
   Search,
   Bell,
@@ -248,9 +248,7 @@ export function TopNav({
       <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
         {/* Mobile logo */}
         <div className="flex shrink-0 items-center gap-2 lg:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
-            <Image src="/images/logo.png" alt="EduNexus" width={32} height={32} className="object-contain logo-blend" />
-          </div>
+          <EduNexusLogo size={28} />
           <span className="text-lg font-bold text-foreground">EduNexus</span>
         </div>
 
