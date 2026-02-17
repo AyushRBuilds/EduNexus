@@ -254,25 +254,29 @@ export function TopNav({
           <span className="text-lg font-bold text-foreground">EduNexus</span>
         </div>
 
-        {/* Center Search */}
-        <div className="flex flex-1 items-center justify-center">
-          <div className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search across lectures, papers, notes..."
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && navSearch.trim()) {
-                  onSearch(navSearch.trim())
-                  setNavSearch("")
-                }
-              }}
-              className="h-10 w-full rounded-xl border border-border bg-secondary/40 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 focus:glow-sm transition-all"
-            />
+        {/* Center Search — hidden when a view provides its own search (e.g. Research Hub) */}
+        {!hideSearch ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="relative w-full max-w-xl">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search across lectures, papers, notes..."
+                value={navSearch}
+                onChange={(e) => setNavSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && navSearch.trim()) {
+                    onSearch(navSearch.trim())
+                    setNavSearch("")
+                  }
+                }}
+                className="h-10 w-full rounded-xl border border-border bg-secondary/40 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 focus:glow-sm transition-all"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex-1" />
+        )}
 
         {/* Right Nav */}
         <nav className="flex items-center gap-1.5">
