@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useAuth } from "@/components/edunexus/auth-context"
 import { LoginPage } from "@/components/edunexus/login-page"
 import { TopNav } from "@/components/edunexus/top-nav"
-import { AppSidebar, type ViewId } from "@/components/edunexus/app-sidebar"
+import { AppSidebar, MobileBottomNav, type ViewId } from "@/components/edunexus/app-sidebar"
 import { HeroSearch } from "@/components/edunexus/hero-search"
 import { SearchResults } from "@/components/edunexus/search-results"
 import { KnowledgeGraph } from "@/components/edunexus/knowledge-graph"
@@ -47,7 +47,7 @@ export default function EduNexusPage() {
           userRole={userRole}
         />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
           {/* Search View */}
           {activeView === "search" && (
             <>
@@ -109,6 +109,13 @@ export default function EduNexusPage() {
           </footer>
         </main>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav
+        activeView={activeView}
+        onNavigate={handleNavigate}
+        userRole={userRole}
+      />
     </div>
   )
 }

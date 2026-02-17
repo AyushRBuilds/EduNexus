@@ -5,8 +5,6 @@ import {
   Search,
   Bell,
   Upload,
-  Menu,
-  X,
   Sparkles,
   LogOut,
   GraduationCap,
@@ -29,7 +27,6 @@ export function TopNav({
   onSearch: (query: string) => void
 }) {
   const { user, logout } = useAuth()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [navSearch, setNavSearch] = useState("")
 
   const role = user?.role ?? "student"
@@ -38,9 +35,9 @@ export function TopNav({
 
   return (
     <header className="sticky top-0 z-50 glass-strong">
-      <div className="mx-auto flex h-16 max-w-[1800px] items-center gap-4 px-4 lg:px-6">
-        {/* Logo */}
-        <div className="flex shrink-0 items-center gap-2">
+      <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
+        {/* Mobile logo - only shows on small screens where sidebar is hidden */}
+        <div className="flex shrink-0 items-center gap-2 lg:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Sparkles className="h-4 w-4 text-primary-foreground" />
           </div>
@@ -48,12 +45,12 @@ export function TopNav({
         </div>
 
         {/* Center Search */}
-        <div className="hidden flex-1 items-center justify-center md:flex">
-          <div className="relative w-full max-w-lg">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="relative w-full max-w-xl">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search knowledge base..."
+              placeholder="Search across lectures, papers, notes..."
               value={navSearch}
               onChange={(e) => setNavSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -62,18 +59,18 @@ export function TopNav({
                   setNavSearch("")
                 }
               }}
-              className="h-9 w-full rounded-xl border border-border bg-secondary/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+              className="h-10 w-full rounded-xl border border-border bg-secondary/40 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50 focus:glow-sm transition-all"
             />
           </div>
         </div>
 
         {/* Right Nav */}
-        <nav className="hidden items-center gap-1.5 md:flex">
+        <nav className="flex items-center gap-1.5">
           {(role === "faculty" || role === "admin") && (
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+              className="hidden text-muted-foreground hover:text-foreground hover:bg-secondary/60 sm:flex"
             >
               <Upload className="mr-1.5 h-4 w-4" />
               Upload
@@ -90,105 +87,30 @@ export function TopNav({
           </Button>
 
           {/* Role Badge */}
-          <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 ${config.bgColor} ml-1`}>
+          <div className={`hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 ${config.bgColor} sm:flex`}>
             <RoleIcon className={`h-3.5 w-3.5 ${config.color}`} />
             <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
           </div>
 
-          {/* User Avatar & Info */}
-          <div className="flex items-center gap-2 ml-1">
-            <Avatar className="h-8 w-8 cursor-pointer border border-border">
-              <AvatarFallback className="bg-primary/20 text-xs text-primary font-medium">
-                {user?.avatar ?? "EN"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="hidden xl:flex flex-col">
-              <span className="text-sm font-medium text-foreground leading-none">{user?.name}</span>
-              <span className="text-xs text-muted-foreground leading-none mt-0.5">{user?.department}</span>
-            </div>
-          </div>
+          {/* User Avatar */}
+          <Avatar className="h-8 w-8 cursor-pointer border border-border">
+            <AvatarFallback className="bg-primary/20 text-xs text-primary font-medium">
+              {user?.avatar ?? "EN"}
+            </AvatarFallback>
+          </Avatar>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={logout}
-            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-1"
+            className="hidden text-muted-foreground hover:text-destructive hover:bg-destructive/10 sm:flex"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
             <span className="sr-only">Sign out</span>
           </Button>
         </nav>
-
-        {/* Mobile toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto text-muted-foreground md:hidden"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          <span className="sr-only">Toggle menu</span>
-        </Button>
       </div>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="border-t border-border px-4 pb-4 pt-3 md:hidden">
-          <div className="relative mb-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search knowledge base..."
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && navSearch.trim()) {
-                  onSearch(navSearch.trim())
-                  setNavSearch("")
-                  setMobileMenuOpen(false)
-                }
-              }}
-              className="h-9 w-full rounded-xl border border-border bg-secondary/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-          </div>
-
-          {/* Mobile user info */}
-          <div className="flex items-center gap-3 mb-3 px-2 py-2 rounded-xl bg-secondary/30">
-            <Avatar className="h-9 w-9 border border-border">
-              <AvatarFallback className="bg-primary/20 text-xs text-primary font-medium">
-                {user?.avatar ?? "EN"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-foreground">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">{user?.department}</p>
-            </div>
-            <div className={`rounded-md px-2 py-0.5 ${config.bgColor}`}>
-              <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            {(role === "faculty" || role === "admin") && (
-              <Button variant="ghost" size="sm" className="justify-start text-muted-foreground">
-                <Upload className="mr-2 h-4 w-4" /> Upload
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" className="justify-start text-muted-foreground">
-              <Bell className="mr-2 h-4 w-4" /> Notifications
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="justify-start text-muted-foreground hover:text-destructive"
-              onClick={logout}
-            >
-              <LogOut className="mr-2 h-4 w-4" /> Sign Out
-            </Button>
-          </div>
-        </div>
-      )}
     </header>
   )
 }
