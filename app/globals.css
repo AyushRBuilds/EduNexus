@@ -250,3 +250,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
+
+/* Logo with transparent white background using blend mode */
+.logo-blend {
+  mix-blend-mode: multiply;
+}
+
+.dark .logo-blend {
+  mix-blend-mode: screen;
+}

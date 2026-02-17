@@ -64,7 +64,7 @@ export function AppSidebar({
         collapsed && "justify-center px-0"
       )}>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-          <Image src="/images/logo.png" alt="EduNexus" width={36} height={36} className="object-contain" />
+          <Image src="/images/logo.png" alt="EduNexus" width={36} height={36} className="object-contain logo-blend" />
         </div>
         {!collapsed && (
           <div className="flex flex-col overflow-hidden">

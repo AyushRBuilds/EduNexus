@@ -39,7 +39,7 @@ export function HeroSearch({
 
       <div className="relative z-10 flex max-w-3xl flex-col items-center text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-4 py-1.5 text-xs font-medium text-muted-foreground">
-          <Image src="/images/logo.png" alt="" width={14} height={14} className="object-contain" />
+          <Image src="/images/logo.png" alt="" width={14} height={14} className="object-contain logo-blend" />
           AI-Powered Semantic Search Engine
         </div>
 

@@ -37,7 +37,7 @@ function AISynthesisCard({ query }: { query: string }) {
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-            <Image src="/images/logo.png" alt="EduNexus AI" width={40} height={40} className="object-contain" />
+            <Image src="/images/logo.png" alt="EduNexus AI" width={40} height={40} className="object-contain logo-blend" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">

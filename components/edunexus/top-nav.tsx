@@ -195,7 +195,8 @@ export function TopNav({
   onProfileClick?: () => void
 }) {
   const { user, logout } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [navSearch, setNavSearch] = useState("")
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState(initialNotifications)
@@ -209,6 +210,9 @@ export function TopNav({
   const canPush = role === "faculty" || role === "admin"
 
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  // Prevent hydration mismatch for theme toggle
+  useEffect(() => { setMounted(true) }, [])
 
   // Close panel on outside click
   useEffect(() => {
@@ -245,7 +249,7 @@ export function TopNav({
         {/* Mobile logo */}
         <div className="flex shrink-0 items-center gap-2 lg:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
-            <Image src="/images/logo.png" alt="EduNexus" width={32} height={32} className="object-contain" />
+            <Image src="/images/logo.png" alt="EduNexus" width={32} height={32} className="object-contain logo-blend" />
           </div>
           <span className="text-lg font-bold text-foreground">EduNexus</span>
         </div>
@@ -284,16 +288,21 @@ export function TopNav({
           )}
 
           {/* Theme toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-            aria-label="Toggle theme"
-          >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          </Button>
+          {mounted && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              className="text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+              aria-label="Toggle theme"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
+          )}
 
           {/* Bell — Notification toggle */}
           <div className="relative" ref={panelRef}>

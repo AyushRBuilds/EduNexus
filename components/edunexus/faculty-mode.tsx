@@ -76,7 +76,7 @@ function UploadPanel() {
 
       {/* AI Preview */}
       <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
-        <Image src="/images/logo.png" alt="" width={16} height={16} className="mt-0.5 shrink-0 object-contain" />
+        <Image src="/images/logo.png" alt="" width={16} height={16} className="mt-0.5 shrink-0 object-contain logo-blend" />
         <div>
           <p className="text-xs font-medium text-foreground">
             AI Auto-Index Preview

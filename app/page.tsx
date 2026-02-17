@@ -118,7 +118,7 @@ export default function EduNexusPage() {
           {/* Footer */}
           <footer className="border-t border-border px-4 py-6">
             <div className="flex items-center justify-center gap-2">
-              <img src="/images/logo.png" alt="EduNexus" width={20} height={20} className="object-contain" />
+              <img src="/images/logo.png" alt="EduNexus" width={20} height={20} className="object-contain logo-blend" />
               <p className="text-xs text-muted-foreground">
                 EduNexus &mdash; A Unified AI Knowledge Infrastructure for Smart
                 Campuses
