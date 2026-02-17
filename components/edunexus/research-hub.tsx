@@ -623,22 +623,6 @@ export function ResearchHub() {
         ))}
       </div>
 
-      {/* Featured Papers */}
-      {!searchQuery && department === "All" && authorFilter === "all" && (
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-3">
-            <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-            Featured Research
-          </h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            {featured.map((paper) => (
-              <PaperCard key={paper.id} paper={paper} onSelect={() => setSelectedPaper(paper)} />
-            ))}
-          </div>
-          <Separator className="mt-6 bg-border/30" />
-        </div>
-      )}
-
       {/* Search + Filters */}
       <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -693,6 +677,22 @@ export function ResearchHub() {
           </select>
         </div>
       </div>
+
+      {/* Featured Papers */}
+      {!searchQuery && department === "All" && authorFilter === "all" && (
+        <div className="mb-8">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-3">
+            <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+            Featured Research
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            {featured.map((paper) => (
+              <PaperCard key={paper.id} paper={paper} onSelect={() => setSelectedPaper(paper)} />
+            ))}
+          </div>
+          <Separator className="mt-6 bg-border/30" />
+        </div>
+      )}
 
       {/* Active Filters */}
       {(department !== "All" || authorFilter !== "all" || searchQuery) && (

@@ -190,9 +190,11 @@ const initialNotifications: Notification[] = [
 export function TopNav({
   onSearch,
   onProfileClick,
+  hideSearch = false,
 }: {
   onSearch: (query: string) => void
   onProfileClick?: () => void
+  hideSearch?: boolean
 }) {
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
