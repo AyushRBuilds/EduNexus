@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Search, ArrowRight, Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
-const filterChips = ["All", "Lectures", "PDFs", "Research Papers", "Notes", "Recordings"] as const
+const filterChips = ["All", "Research Papers", "PPT", "Video Lectures", "Notes"] as const
 
 const placeholders = [
   "Explain Laplace Transform applications in circuit analysis",

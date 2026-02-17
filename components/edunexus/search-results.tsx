@@ -5,16 +5,28 @@ import {
   Sparkles,
   BookOpen,
   FileText,
-  Video,
   Download,
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  Clock,
   BarChart3,
+  Video,
+  Presentation,
+  Filter,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+
+/* ---------- Filter types ---------- */
+type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
+
+const FILTERS: { id: ContentFilter; label: string; icon: typeof FileText }[] = [
+  { id: "all", label: "All", icon: Filter },
+  { id: "research", label: "Research Papers", icon: FileText },
+  { id: "ppt", label: "PPT", icon: Presentation },
+  { id: "video", label: "Video Lectures", icon: Video },
+  { id: "notes", label: "Notes", icon: BookOpen },
+]
 
 /* ---------- Synthesis Card ---------- */
 function AISynthesisCard({ query }: { query: string }) {
@@ -22,7 +34,6 @@ function AISynthesisCard({ query }: { query: string }) {
 
   return (
     <div className="glass rounded-2xl p-6 glow-sm">
-      {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15">
@@ -45,7 +56,6 @@ function AISynthesisCard({ query }: { query: string }) {
         </Badge>
       </div>
 
-      {/* Content */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
         <div>
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -154,202 +164,234 @@ function AISynthesisCard({ query }: { query: string }) {
   )
 }
 
-/* ---------- Video result card ---------- */
-function VideoResultCard({
-  title,
-  professor,
-  timestamp,
-  match,
-}: {
+/* ---------- Unified result card ---------- */
+interface ResultItem {
   title: string
-  professor: string
-  timestamp: string
+  type: ContentFilter
+  typeLabel: string
+  subject: string
+  author: string
+  meta: string // size or duration
   match: number
-}) {
-  return (
-    <div className="glass group flex gap-4 rounded-xl p-4 transition-colors hover:border-primary/30">
-      {/* Thumbnail placeholder */}
-      <div className="relative h-20 w-32 shrink-0 overflow-hidden rounded-lg bg-secondary">
-        <div className="flex h-full items-center justify-center">
-          <Video className="h-6 w-6 text-muted-foreground/40" />
-        </div>
-        <span className="absolute bottom-1 right-1 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-          {timestamp}
-        </span>
-      </div>
-      <div className="flex flex-1 flex-col justify-between">
-        <div>
-          <h4 className="text-sm font-medium text-foreground line-clamp-2">
-            {title}
-          </h4>
-          <p className="mt-0.5 text-xs text-muted-foreground">{professor}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Clock className="h-3 w-3 text-muted-foreground" />
-          <span className="text-[11px] text-muted-foreground">
-            Relevant at {timestamp}
-          </span>
-          <div className="ml-auto flex items-center gap-1">
-            <BarChart3 className="h-3 w-3 text-primary" />
-            <span className="text-[11px] font-medium text-primary">
-              {match}% match
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  detail: string // page ref or timestamp
 }
 
-/* ---------- Document result card ---------- */
-function DocumentResultCard({
-  title,
-  type,
-  subject,
-  size,
-  page,
-  match,
-}: {
-  title: string
-  type: string
-  subject: string
-  size: string
-  page: number
-  match: number
-}) {
+const ALL_RESULTS: ResultItem[] = [
+  {
+    title: "Laplace Transform: Theory and Applications in Engineering",
+    type: "research",
+    typeLabel: "Research Paper",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "2.4 MB",
+    match: 97,
+    detail: "Cited 45 times",
+  },
+  {
+    title: "Introduction to Laplace Transform & Properties",
+    type: "video",
+    typeLabel: "Video Lecture",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "45 min",
+    match: 96,
+    detail: "Relevant at 14:32",
+  },
+  {
+    title: "Integral Transforms - Lecture Slides (Week 7)",
+    type: "ppt",
+    typeLabel: "Presentation",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "5.2 MB",
+    match: 94,
+    detail: "42 slides",
+  },
+  {
+    title: "Integral Transforms in Circuit Analysis",
+    type: "research",
+    typeLabel: "Research Paper",
+    subject: "Electrical Engineering",
+    author: "Prof. A. Mehta",
+    meta: "1.8 MB",
+    match: 92,
+    detail: "Cited 22 times",
+  },
+  {
+    title: "Laplace Transform in Circuit Analysis - RLC Circuits",
+    type: "video",
+    typeLabel: "Video Lecture",
+    subject: "Network Theory",
+    author: "Prof. A. Mehta",
+    meta: "38 min",
+    match: 91,
+    detail: "Relevant at 08:15",
+  },
+  {
+    title: "Study Material: Unit 4 - Integral Transforms",
+    type: "notes",
+    typeLabel: "Notes",
+    subject: "Department Notes",
+    author: "Dept. of Mathematics",
+    meta: "3.1 MB",
+    match: 89,
+    detail: "Pages 142-158",
+  },
+  {
+    title: "Control Systems & Transfer Functions - Slides",
+    type: "ppt",
+    typeLabel: "Presentation",
+    subject: "Control Systems",
+    author: "Prof. S. Gupta",
+    meta: "3.8 MB",
+    match: 88,
+    detail: "56 slides",
+  },
+  {
+    title: "Inverse Laplace Transform Techniques",
+    type: "video",
+    typeLabel: "Video Lecture",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "52 min",
+    match: 87,
+    detail: "Relevant at 22:05",
+  },
+  {
+    title: "GATE Preparation: Laplace Transform Problem Set",
+    type: "notes",
+    typeLabel: "Notes",
+    subject: "Exam Prep",
+    author: "Academic Cell",
+    meta: "850 KB",
+    match: 84,
+    detail: "50 problems",
+  },
+  {
+    title: "Signal Processing: Time & Frequency Domain Methods",
+    type: "research",
+    typeLabel: "Research Paper",
+    subject: "Signal Processing",
+    author: "Prof. K. Rajan",
+    meta: "2.1 MB",
+    match: 79,
+    detail: "Cited 18 times",
+  },
+]
+
+const typeIconMap: Record<ContentFilter, typeof FileText> = {
+  all: Filter,
+  research: FileText,
+  ppt: Presentation,
+  video: Video,
+  notes: BookOpen,
+}
+
+const typeColorMap: Record<ContentFilter, { text: string; bg: string; border: string }> = {
+  all: { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
+  research: { text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
+  ppt: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+  video: { text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" },
+  notes: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+}
+
+function ResultCard({ item }: { item: ResultItem }) {
+  const colors = typeColorMap[item.type]
+  const Icon = typeIconMap[item.type]
+
   return (
-    <div className="glass group flex items-start gap-4 rounded-xl p-4 transition-colors hover:border-primary/30">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/15">
-        {type === "PDF" ? (
-          <FileText className="h-5 w-5 text-accent" />
-        ) : (
-          <BookOpen className="h-5 w-5 text-primary" />
-        )}
+    <div className="glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}>
+        <Icon className={`h-5 w-5 ${colors.text}`} />
       </div>
-      <div className="flex-1">
-        <h4 className="text-sm font-medium text-foreground">{title}</h4>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-medium text-foreground line-clamp-1">{item.title}</h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">{item.author} &middot; {item.subject}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
-            className="border-border bg-secondary/40 text-xs text-muted-foreground"
+            className={`${colors.border} ${colors.bg} ${colors.text} text-[10px]`}
           >
-            {type}
+            {item.typeLabel}
           </Badge>
-          <span>{subject}</span>
-          <span>{size}</span>
-          <span>Found on Page {page}</span>
-        </div>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex items-center gap-1">
+          <span className="text-[11px] text-muted-foreground">{item.meta}</span>
+          <span className="text-[11px] text-muted-foreground">{item.detail}</span>
+          <div className="ml-auto flex items-center gap-1">
             <BarChart3 className="h-3 w-3 text-primary" />
-            <span className="text-[11px] font-medium text-primary">
-              {match}% match
-            </span>
+            <span className="text-[11px] font-medium text-primary">{item.match}%</span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Download className="h-3 w-3" />
-            Download
-          </Button>
         </div>
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Download className="h-3.5 w-3.5" />
+        <span className="sr-only">Download</span>
+      </Button>
     </div>
   )
 }
 
 /* ---------- Main Search Results ---------- */
 export function SearchResults({ query }: { query: string }) {
+  const [filter, setFilter] = useState<ContentFilter>("all")
+
+  const filtered = filter === "all" ? ALL_RESULTS : ALL_RESULTS.filter((r) => r.type === filter)
+
   return (
     <section className="mx-auto max-w-6xl px-4 pb-16">
       <p className="mb-6 text-sm text-muted-foreground">
         Showing results for{" "}
         <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span>
+        <span className="ml-2 text-muted-foreground">
+          &middot; {filtered.length} result{filtered.length !== 1 ? "s" : ""}
+        </span>
       </p>
 
       {/* AI Synthesis */}
       <AISynthesisCard query={query} />
 
-      {/* Two-column results */}
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        {/* Left Column – Video Lectures */}
-        <div>
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Video className="h-4 w-4 text-primary" />
-            Video Lectures
-          </h3>
-          <div className="flex flex-col gap-3">
-            <VideoResultCard
-              title="Introduction to Laplace Transform & Properties"
-              professor="Prof. R. Sharma - Applied Mathematics III"
-              timestamp="14:32"
-              match={96}
-            />
-            <VideoResultCard
-              title="Laplace Transform in Circuit Analysis - RLC Circuits"
-              professor="Prof. A. Mehta - Network Theory"
-              timestamp="08:15"
-              match={91}
-            />
-            <VideoResultCard
-              title="Inverse Laplace Transform Techniques"
-              professor="Prof. R. Sharma - Applied Mathematics III"
-              timestamp="22:05"
-              match={87}
-            />
-            <VideoResultCard
-              title="Transfer Functions & System Analysis"
-              professor="Prof. S. Gupta - Control Systems"
-              timestamp="05:48"
-              match={78}
-            />
-          </div>
-        </div>
-
-        {/* Right Column – PDFs & Papers */}
-        <div>
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <FileText className="h-4 w-4 text-accent" />
-            PDFs & Research Papers
-          </h3>
-          <div className="flex flex-col gap-3">
-            <DocumentResultCard
-              title="Laplace Transform: Theory and Applications in Engineering"
-              type="PDF"
-              subject="Applied Mathematics III"
-              size="2.4 MB"
-              page={12}
-              match={97}
-            />
-            <DocumentResultCard
-              title="Integral Transforms in Circuit Analysis"
-              type="Research Paper"
-              subject="Electrical Engineering"
-              size="1.8 MB"
-              page={5}
-              match={92}
-            />
-            <DocumentResultCard
-              title="Study Material: Unit 4 - Integral Transforms"
-              type="PDF"
-              subject="Department Notes"
-              size="3.1 MB"
-              page={1}
-              match={89}
-            />
-            <DocumentResultCard
-              title="GATE Preparation: Laplace Transform Problem Set"
-              type="PDF"
-              subject="Exam Prep"
-              size="850 KB"
-              page={3}
-              match={84}
-            />
-          </div>
-        </div>
+      {/* Filter Bar */}
+      <div className="mt-8 mb-5 flex items-center gap-2 overflow-x-auto pb-1">
+        {FILTERS.map((f) => {
+          const Icon = f.icon
+          const isActive = filter === f.id
+          const count = f.id === "all" ? ALL_RESULTS.length : ALL_RESULTS.filter((r) => r.type === f.id).length
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
+                isActive
+                  ? "bg-primary/15 text-primary border border-primary/30"
+                  : "bg-secondary/30 text-muted-foreground border border-transparent hover:bg-secondary/50 hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {f.label}
+              <span className={`ml-0.5 text-[10px] ${isActive ? "text-primary/70" : "text-muted-foreground/60"}`}>
+                ({count})
+              </span>
+            </button>
+          )
+        })}
       </div>
+
+      {/* Results List */}
+      <div className="flex flex-col gap-3">
+        {filtered.map((item, i) => (
+          <ResultCard key={i} item={item} />
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Filter className="h-8 w-8 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">No results found for this filter</p>
+        </div>
+      )}
     </section>
   )
 }

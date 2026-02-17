@@ -1,22 +1,30 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth } from "@/components/edunexus/auth-context"
+import { LoginPage } from "@/components/edunexus/login-page"
 import { TopNav } from "@/components/edunexus/top-nav"
 import { AppSidebar, type ViewId } from "@/components/edunexus/app-sidebar"
 import { HeroSearch } from "@/components/edunexus/hero-search"
 import { SearchResults } from "@/components/edunexus/search-results"
 import { KnowledgeGraph } from "@/components/edunexus/knowledge-graph"
-import { CommunityDiscussions } from "@/components/edunexus/community-discussions"
 import { TrendingSection } from "@/components/edunexus/trending-section"
 import { FacultyMode } from "@/components/edunexus/faculty-mode"
-
-type UserMode = "student" | "faculty"
+import { ResearchCollab } from "@/components/edunexus/research-collab"
+import { AdminDashboard } from "@/components/edunexus/admin-dashboard"
 
 export default function EduNexusPage() {
+  const { user, isAuthenticated } = useAuth()
   const [activeView, setActiveView] = useState<ViewId>("search")
   const [searchQuery, setSearchQuery] = useState("")
   const [hasSearched, setHasSearched] = useState(false)
-  const [userMode, setUserMode] = useState<UserMode>("student")
+
+  // Show login if not authenticated
+  if (!isAuthenticated || !user) {
+    return <LoginPage />
+  }
+
+  const userRole = user.role
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -26,83 +34,69 @@ export default function EduNexusPage() {
 
   const handleNavigate = (view: ViewId) => {
     setActiveView(view)
-    if (view === "faculty") {
-      setUserMode("faculty")
-    }
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-background bg-grid">
-      <TopNav onSearch={handleSearch} searchQuery={searchQuery} />
+      <TopNav onSearch={handleSearch} />
 
       <div className="flex flex-1">
-        <AppSidebar activeView={activeView} onNavigate={handleNavigate} />
+        <AppSidebar
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          userRole={userRole}
+        />
 
         <main className="flex-1 overflow-y-auto">
-          {/* Mode toggle */}
-          <div className="flex items-center justify-center gap-1 pt-4">
-            <div className="flex items-center gap-1 rounded-xl border border-border bg-secondary/30 p-1">
-              <button
-                onClick={() => {
-                  setUserMode("student")
-                  if (activeView === "faculty") setActiveView("search")
-                }}
-                className={`rounded-lg px-4 py-1.5 text-xs font-medium transition-colors ${
-                  userMode === "student"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Student View
-              </button>
-              <button
-                onClick={() => {
-                  setUserMode("faculty")
-                  setActiveView("faculty")
-                }}
-                className={`rounded-lg px-4 py-1.5 text-xs font-medium transition-colors ${
-                  userMode === "faculty"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Faculty View
-              </button>
-            </div>
-          </div>
-
-          {/* Views */}
+          {/* Search View */}
           {activeView === "search" && (
             <>
               {!hasSearched && <HeroSearch onSearch={handleSearch} />}
               {hasSearched && <SearchResults query={searchQuery} />}
               {hasSearched && <KnowledgeGraph query={searchQuery} />}
               {!hasSearched && <TrendingSection onSearch={handleSearch} />}
-              <CommunityDiscussions />
             </>
           )}
 
+          {/* Knowledge Graph View */}
           {activeView === "graph" && (
             <div className="pt-8">
               <KnowledgeGraph query={searchQuery || "Laplace Transform"} />
             </div>
           )}
 
-          {activeView === "community" && (
-            <div className="pt-8">
-              <CommunityDiscussions />
-            </div>
-          )}
-
+          {/* Research Repository View */}
           {activeView === "research" && (
             <div className="pt-8">
               <SearchResults query={searchQuery || "Research Repository"} />
             </div>
           )}
 
-          {activeView === "faculty" && (
+          {/* Research Collaboration View */}
+          {activeView === "collab" && (
+            <div className="pt-8">
+              <ResearchCollab userRole={userRole} />
+            </div>
+          )}
+
+          {/* Trending View */}
+          {activeView === "trending" && (
+            <div className="pt-8">
+              <TrendingSection onSearch={handleSearch} />
+            </div>
+          )}
+
+          {/* Faculty Studio View (faculty + admin only) */}
+          {activeView === "faculty" && (userRole === "faculty" || userRole === "admin") && (
             <div className="pt-8">
               <FacultyMode />
+            </div>
+          )}
+
+          {/* Admin Dashboard View (admin only) */}
+          {activeView === "admin" && userRole === "admin" && (
+            <div className="pt-8">
+              <AdminDashboard />
             </div>
           )}
 
