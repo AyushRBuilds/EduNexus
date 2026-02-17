@@ -12,6 +12,7 @@ import {
   ChevronRight,
   TrendingUp,
   Sparkles,
+  MonitorPlay,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserRole } from "./auth-context"
@@ -29,12 +30,13 @@ const sidebarItems: SidebarItem[] = [
   { icon: Network, label: "Knowledge Graph", id: "graph", roles: ["student", "faculty", "admin"], color: "text-emerald-400" },
   { icon: BookOpen, label: "Research Repo", id: "research", roles: ["student", "faculty", "admin"], color: "text-orange-400" },
   { icon: Handshake, label: "Research Collab", id: "collab", roles: ["student", "faculty", "admin"], color: "text-pink-400" },
+  { icon: MonitorPlay, label: "Study Mode", id: "study", roles: ["student", "faculty", "admin"], color: "text-cyan-400" },
   { icon: TrendingUp, label: "Trending", id: "trending", roles: ["student", "faculty", "admin"], color: "text-yellow-400" },
   { icon: GraduationCap, label: "Faculty Studio", id: "faculty", roles: ["faculty", "admin"], color: "text-indigo-400" },
   { icon: LayoutDashboard, label: "Admin Panel", id: "admin", roles: ["admin"], color: "text-amber-400" },
 ]
 
-export type ViewId = "search" | "graph" | "research" | "collab" | "trending" | "faculty" | "admin"
+export type ViewId = "search" | "graph" | "research" | "collab" | "study" | "trending" | "faculty" | "admin"
 
 export function AppSidebar({
   activeView,

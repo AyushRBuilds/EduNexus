@@ -12,6 +12,7 @@ import { TrendingSection } from "@/components/edunexus/trending-section"
 import { FacultyMode } from "@/components/edunexus/faculty-mode"
 import { ResearchCollab } from "@/components/edunexus/research-collab"
 import { AdminDashboard } from "@/components/edunexus/admin-dashboard"
+import { StudyWorkspace } from "@/components/edunexus/study-workspace"
 
 export default function EduNexusPage() {
   const { user, isAuthenticated } = useAuth()
@@ -34,6 +35,17 @@ export default function EduNexusPage() {
 
   const handleNavigate = (view: ViewId) => {
     setActiveView(view)
+  }
+
+  const isStudyMode = activeView === "study"
+
+  // Study mode: fully immersive, no sidebar/topnav/footer
+  if (isStudyMode) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <StudyWorkspace onBack={() => setActiveView("search")} />
+      </div>
+    )
   }
 
   return (

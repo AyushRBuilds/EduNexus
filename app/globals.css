@@ -158,6 +158,26 @@
   animation: float 4s ease-in-out infinite;
 }
 
+/* Node glow pulse for mind map */
+@keyframes node-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+.animate-node-glow {
+  animation: node-glow 3s ease-in-out infinite;
+}
+
+/* Breathing glow for core node */
+@keyframes breathe-glow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-breathe {
+  animation: breathe-glow 4s ease-in-out infinite;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
