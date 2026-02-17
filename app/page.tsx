@@ -55,78 +55,86 @@ export default function EduNexusPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background bg-grid">
-      <TopNav onSearch={handleSearch} onProfileClick={() => setProfileOpen(true)} hideSearch={activeView !== "search"} onLogoClick={() => { setActiveView("search"); setHasSearched(false) }} />
-
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
         <AppSidebar
           activeView={activeView}
           onNavigate={handleNavigate}
           userRole={userRole}
         />
 
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
-          {/* Search View */}
-          {activeView === "search" && (
-            <>
-              {!hasSearched && <HeroSearch onSearch={handleSearch} />}
-              {hasSearched && <SearchResults query={searchQuery} />}
-              {!hasSearched && <TrendingSection onSearch={handleSearch} />}
-            </>
-          )}
+        <div className="flex flex-1 flex-col overflow-y-auto">
+          <TopNav
+            onSearch={handleSearch}
+            onProfileClick={() => setProfileOpen(true)}
+            hideSearch={activeView !== "search"}
+            onLogoClick={() => { setActiveView("search"); setHasSearched(false) }}
+            isSticky={activeView !== "search"}
+          />
 
-          {/* Research Hub View */}
-          {activeView === "research" && (
-            <div className="pt-8">
-              <ResearchHub />
-            </div>
-          )}
+          <main className="flex-1 pb-16 lg:pb-0">
+            {/* Search View */}
+            {activeView === "search" && (
+              <>
+                {!hasSearched && <HeroSearch onSearch={handleSearch} />}
+                {hasSearched && <SearchResults query={searchQuery} />}
+                {!hasSearched && <TrendingSection onSearch={handleSearch} />}
+              </>
+            )}
 
-          {/* Research Collaboration View */}
-          {activeView === "collab" && (
-            <div className="pt-8">
-              <ResearchCollab userRole={userRole} />
-            </div>
-          )}
+            {/* Research Hub View */}
+            {activeView === "research" && (
+              <div className="pt-8">
+                <ResearchHub />
+              </div>
+            )}
 
-          {/* Subjects View */}
-          {activeView === "subjects" && (
-            <div className="pt-8">
-              <SubjectsView userRole={userRole} />
-            </div>
-          )}
+            {/* Research Collaboration View */}
+            {activeView === "collab" && (
+              <div className="pt-8">
+                <ResearchCollab userRole={userRole} />
+              </div>
+            )}
 
-          {/* Trending View */}
-          {activeView === "trending" && (
-            <div className="pt-8">
-              <TrendingSection onSearch={handleSearch} />
-            </div>
-          )}
+            {/* Subjects View */}
+            {activeView === "subjects" && (
+              <div className="pt-8">
+                <SubjectsView userRole={userRole} />
+              </div>
+            )}
 
-          {/* Faculty Studio View (faculty + admin only) */}
-          {activeView === "faculty" && (userRole === "faculty" || userRole === "admin") && (
-            <div className="pt-8">
-              <FacultyMode />
-            </div>
-          )}
+            {/* Trending View */}
+            {activeView === "trending" && (
+              <div className="pt-8">
+                <TrendingSection onSearch={handleSearch} />
+              </div>
+            )}
 
-          {/* Admin Dashboard View (admin only) */}
-          {activeView === "admin" && userRole === "admin" && (
-            <div className="pt-8">
-              <AdminDashboard />
-            </div>
-          )}
+            {/* Faculty Studio View (faculty + admin only) */}
+            {activeView === "faculty" && (userRole === "faculty" || userRole === "admin") && (
+              <div className="pt-8">
+                <FacultyMode />
+              </div>
+            )}
 
-          {/* Footer */}
-          <footer className="border-t border-border px-4 py-6">
-            <div className="flex items-center justify-center gap-2">
-              <EduNexusLogo size={18} />
-              <p className="text-xs text-muted-foreground">
-                EduNexus &mdash; A Unified AI Knowledge Infrastructure for Smart
-                Campuses
-              </p>
-            </div>
-          </footer>
-        </main>
+            {/* Admin Dashboard View (admin only) */}
+            {activeView === "admin" && userRole === "admin" && (
+              <div className="pt-8">
+                <AdminDashboard />
+              </div>
+            )}
+
+            {/* Footer */}
+            <footer className="border-t border-border px-4 py-6">
+              <div className="flex items-center justify-center gap-2">
+                <EduNexusLogo size={18} />
+                <p className="text-xs text-muted-foreground">
+                  EduNexus &mdash; A Unified AI Knowledge Infrastructure for Smart
+                  Campuses
+                </p>
+              </div>
+            </footer>
+          </main>
+        </div>
       </div>
 
       {/* Mobile bottom navigation */}

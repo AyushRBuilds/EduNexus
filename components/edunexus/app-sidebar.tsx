@@ -54,7 +54,7 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        "hidden flex-col border-r border-border/60 bg-sidebar transition-all duration-300 ease-in-out lg:flex relative",
+        "hidden flex-col border-r border-border/30 bg-sidebar/80 backdrop-blur-xl transition-all duration-300 ease-in-out lg:flex relative",
         collapsed ? "w-[68px]" : "w-60"
       )}
     >
@@ -62,7 +62,7 @@ export function AppSidebar({
       <button
         onClick={() => onNavigate("search")}
         className={cn(
-          "flex items-center gap-2.5 border-b border-border/40 px-4 h-16 shrink-0 w-full text-left transition-colors hover:bg-secondary/40",
+          "flex items-center gap-2.5 px-4 h-14 shrink-0 w-full text-left transition-colors hover:bg-secondary/40",
           collapsed && "justify-center px-0"
         )}
         aria-label="Go to Smart Search"
@@ -77,6 +77,9 @@ export function AppSidebar({
           </div>
         )}
       </button>
+
+      {/* Subtle divider between logo and nav */}
+      <div className="mx-3 h-px bg-border/30" />
 
       {/* Navigation items */}
       <nav className="flex flex-1 flex-col gap-1 px-2.5 py-4 overflow-y-auto">

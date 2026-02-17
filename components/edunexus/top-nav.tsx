@@ -192,11 +192,13 @@ export function TopNav({
   onProfileClick,
   hideSearch = false,
   onLogoClick,
+  isSticky = true,
 }: {
   onSearch: (query: string) => void
   onProfileClick?: () => void
   hideSearch?: boolean
   onLogoClick?: () => void
+  isSticky?: boolean
 }) {
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
@@ -248,8 +250,11 @@ export function TopNav({
   }
 
   return (
-    <header className="sticky top-0 z-50 glass-strong">
-      <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
+    <header className={cn(
+      "z-50 glass-strong",
+      isSticky ? "sticky top-0" : "relative"
+    )}>
+      <div className="flex h-14 items-center gap-4 border-b border-border/30 px-4 lg:px-6">
         {/* Mobile logo */}
         <button
           onClick={onLogoClick}
