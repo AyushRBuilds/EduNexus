@@ -26,6 +26,17 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -427,16 +438,36 @@ export function TopNav({
             </Avatar>
           </button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={logout}
-            className="hidden text-muted-foreground hover:text-destructive hover:bg-destructive/10 sm:flex"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="sr-only">Sign out</span>
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden text-muted-foreground hover:text-destructive hover:bg-destructive/10 sm:flex"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only">Sign out</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="border-border/60 bg-card">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sign out of EduNexus?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You will be logged out of your account and returned to the sign-in screen. Any unsaved changes will be lost.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-border/50">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={logout}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Sign Out
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </nav>
       </div>
 

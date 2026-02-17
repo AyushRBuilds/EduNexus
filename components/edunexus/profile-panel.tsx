@@ -25,6 +25,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog"
 import type { User, UserRole } from "./auth-context"
 
 const roleConfig: Record<
@@ -481,15 +492,35 @@ export function ProfilePanel({
                 <Settings className="h-3.5 w-3.5" />
                 Account Settings
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onLogout}
-                className="w-full justify-start gap-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/15 hover:text-destructive"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Sign Out
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start gap-2 border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/15 hover:text-destructive"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign Out
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-border/60 bg-card">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign out of EduNexus?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You will be logged out of your account and returned to the sign-in screen. Any unsaved changes will be lost.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="border-border/50">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onLogout}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Sign Out
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </>
         )}
