@@ -29,7 +29,7 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { icon: Search, label: "Smart Search", id: "search", roles: ["student", "faculty", "admin"], color: "text-sky-400" },
   { icon: BookOpen, label: "Research Hub", id: "research", roles: ["student", "faculty", "admin"], color: "text-orange-400" },
-  { icon: Handshake, label: "Research Collab", id: "collab", roles: ["student", "faculty", "admin"], color: "text-pink-400" },
+  { icon: Handshake, label: "Collab", id: "collab", roles: ["student", "faculty", "admin"], color: "text-pink-400" },
   { icon: Library, label: "Subjects", id: "subjects", roles: ["student", "faculty", "admin"], color: "text-lime-400" },
   { icon: MonitorPlay, label: "Study Mode", id: "study", roles: ["student"], color: "text-cyan-400" },
   { icon: Bell, label: "Notifications", id: "notifications", roles: ["student", "faculty", "admin"], color: "text-rose-400" },
