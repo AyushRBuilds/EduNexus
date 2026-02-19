@@ -200,40 +200,20 @@ function AISynthesisCard({
   materialsLoading: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState(false)
-  const [scholarLink, setScholarLink] = useState<string | null>(null)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // n8n workflow state
+  // n8n is the PRIMARY AI source for search & explain
   const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
   const [n8nLoading, setN8nLoading] = useState(false)
   const [n8nError, setN8nError] = useState(false)
 
-  // Call /ai/explain when we have a best subject
-  useEffect(() => {
-    if (!bestSubject || !query) return
+  // Fallback: old backend AI explain (used only when n8n fails)
+  const [fallbackAnswer, setFallbackAnswer] = useState<string | null>(null)
+  const [fallbackLoading, setFallbackLoading] = useState(false)
+  const [fallbackError, setFallbackError] = useState(false)
+  const [scholarLink, setScholarLink] = useState<string | null>(null)
 
-    setAiLoading(true)
-    setAiError(false)
-    setAiAnswer(null)
-    setScholarLink(null)
-
-    aiExplain(query, bestSubject.id)
-      .then((res) => {
-        if (res.error) {
-          setAiError(true)
-        } else {
-          setAiAnswer(res.answer || res.message || null)
-          setScholarLink(res.scholarLink || null)
-        }
-      })
-      .catch(() => setAiError(true))
-      .finally(() => setAiLoading(false))
-  }, [query, bestSubject])
-
-  // Call n8n workflow whenever query changes
+  // 1. Call n8n workflow (primary) whenever query changes
   useEffect(() => {
     if (!query) return
 
@@ -244,14 +224,49 @@ function AISynthesisCard({
     n8nChat(query)
       .then((res) => {
         if (res.error || !res.output) {
+          console.log("[v0] n8n returned error or empty:", res.error)
           setN8nError(true)
         } else {
+          console.log("[v0] n8n answer received, length:", res.output.length)
           setN8nAnswer(res.output)
         }
       })
-      .catch(() => setN8nError(true))
+      .catch((err) => {
+        console.log("[v0] n8n fetch failed:", err)
+        setN8nError(true)
+      })
       .finally(() => setN8nLoading(false))
   }, [query])
+
+  // 2. Call backend /ai/explain as fallback when n8n fails
+  useEffect(() => {
+    // Only call fallback if n8n has finished and failed
+    if (n8nLoading || !n8nError) return
+    if (!bestSubject || !query) return
+
+    setFallbackLoading(true)
+    setFallbackError(false)
+    setFallbackAnswer(null)
+    setScholarLink(null)
+
+    aiExplain(query, bestSubject.id)
+      .then((res) => {
+        if (res.error) {
+          setFallbackError(true)
+        } else {
+          setFallbackAnswer(res.answer || res.message || null)
+          setScholarLink(res.scholarLink || null)
+        }
+      })
+      .catch(() => setFallbackError(true))
+      .finally(() => setFallbackLoading(false))
+  }, [query, bestSubject, n8nLoading, n8nError])
+
+  // Derived: the best available answer
+  const aiAnswer = n8nAnswer || fallbackAnswer
+  const aiLoading = n8nLoading || (n8nError && fallbackLoading)
+  const aiError = n8nError && fallbackError
+  const answerSource = n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
 
   // Derive related subjects from matched materials
   const relatedSubjects = Array.from(
@@ -274,20 +289,24 @@ function AISynthesisCard({
             </h2>
             <p className="text-xs text-muted-foreground">
               {materials.length > 0
-                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} + n8n workflow`
-                : "Searching institutional sources + n8n workflow..."}
+                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} via n8n workflow`
+                : "Querying n8n workflow..."}
             </p>
           </div>
         </div>
       </div>
 
-      {/* AI-generated explanation */}
+      {/* AI-generated explanation (n8n primary, backend fallback) */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
         {(aiLoading || materialsLoading) && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4 animate-pulse text-primary" />
-              <span className="text-xs">AI is analyzing your query across institutional knowledge...</span>
+              <span className="text-xs">
+                {n8nLoading
+                  ? "Querying n8n workflow for AI explanation..."
+                  : "AI is analyzing your query across institutional knowledge..."}
+              </span>
             </div>
             <div className="space-y-2">
               <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
@@ -299,9 +318,17 @@ function AISynthesisCard({
 
         {!aiLoading && !materialsLoading && aiAnswer && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Explanation
-            </h3>
+            <div className="mb-1.5 flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                AI Explanation
+              </h3>
+              {answerSource && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  <Zap className="h-2.5 w-2.5" />
+                  {answerSource}
+                </span>
+              )}
+            </div>
             <p className="whitespace-pre-line">{aiAnswer}</p>
           </div>
         )}
@@ -327,50 +354,6 @@ function AISynthesisCard({
             </p>
           </div>
         )}
-
-        {/* n8n Workflow Answer */}
-        <div className="mt-3 rounded-xl border border-border/50 bg-secondary/20 p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
-              <Zap className="h-3.5 w-3.5 text-primary" />
-            </div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              n8n Workflow Intelligence
-            </h3>
-            {n8nLoading && (
-              <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Bot className="h-3 w-3 animate-pulse text-primary" />
-                Processing...
-              </span>
-            )}
-          </div>
-
-          {n8nLoading && (
-            <div className="space-y-2">
-              <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
-              <div className="h-4 w-4/5 animate-pulse rounded bg-secondary/50" />
-              <div className="h-4 w-3/5 animate-pulse rounded bg-secondary/50" />
-            </div>
-          )}
-
-          {!n8nLoading && n8nAnswer && (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-secondary-foreground">
-              {n8nAnswer}
-            </p>
-          )}
-
-          {!n8nLoading && n8nError && (
-            <p className="text-xs italic text-muted-foreground">
-              n8n workflow is not responding. Please ensure the workflow is toggled <strong className="font-semibold text-foreground/70">Active</strong> in the n8n editor.
-            </p>
-          )}
-
-          {!n8nLoading && !n8nAnswer && !n8nError && (
-            <p className="text-xs italic text-muted-foreground">
-              No workflow response for this query.
-            </p>
-          )}
-        </div>
 
         {expanded && (
           <>
@@ -506,9 +489,9 @@ function AISynthesisCard({
       )}
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        {materials.length > 0
-          ? `Answer grounded in ${materials.length} institutional source${materials.length !== 1 ? "s" : ""} + n8n workflow`
-          : "Searching institutional content + n8n workflow..."}
+        {answerSource
+          ? `Powered by ${answerSource} — ${materials.length} source${materials.length !== 1 ? "s" : ""} analyzed`
+          : "Querying n8n workflow..."}
       </p>
 
       {/* In-app material viewer */}
