@@ -27,6 +27,22 @@ import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
 
+/* ---------- Supabase material type ---------- */
+interface SupabaseMaterial {
+  id: string
+  created_at: string
+  faculty_email: string
+  faculty_name: string | null
+  subject: string
+  type: string
+  title: string
+  description: string | null
+  file_url: string | null
+  external_url: string | null
+  file_path: string | null
+  tags: string[]
+}
+
 /* ---------- Filter types ---------- */
 export type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
 
@@ -68,6 +84,47 @@ function scoreRelevance(material: BackendMaterial, query: string): number {
   return Math.min(100, Math.max(0, score))
 }
 
+/* ---------- Relevance scorer for Supabase materials ---------- */
+function scoreSupabaseMaterial(mat: SupabaseMaterial, query: string): number {
+  const q = query.toLowerCase()
+  const tokens = q.split(/\s+/).filter(Boolean)
+  let score = 0
+
+  const title = (mat.title || "").toLowerCase()
+  const desc = (mat.description || "").toLowerCase()
+  const subject = (mat.subject || "").toLowerCase()
+  const tagsStr = (mat.tags || []).join(" ").toLowerCase()
+
+  if (title.includes(q)) score += 45
+  if (desc.includes(q)) score += 35
+  if (subject.includes(q)) score += 30
+  if (tagsStr.includes(q)) score += 20
+
+  for (const token of tokens) {
+    if (token.length < 2) continue
+    if (title.includes(token)) score += 14
+    if (desc.includes(token)) score += 10
+    if (subject.includes(token)) score += 8
+    if (tagsStr.includes(token)) score += 6
+  }
+
+  return Math.min(100, Math.max(0, score))
+}
+
+/* ---------- Map Supabase type to filter type ---------- */
+function mapSupabaseTypeToFilter(type: string): ContentFilter {
+  switch (type) {
+    case "PDF":
+      return "notes"
+    case "VIDEO":
+      return "video"
+    case "LINK":
+      return "research"
+    default:
+      return "notes"
+  }
+}
+
 /* ---------- Map backend type to filter type ---------- */
 function mapTypeToFilter(type: string): ContentFilter {
   switch (type) {
@@ -106,6 +163,7 @@ interface ResultItem {
   match: number
   detail: string
   backendMaterial?: BackendMaterial // present when from backend
+  supabaseMaterial?: SupabaseMaterial // present when from Supabase faculty uploads
   isStatic?: boolean
 }
 
@@ -286,8 +344,8 @@ function AISynthesisCard({
             </h2>
             <p className="text-xs text-muted-foreground">
               {materials.length > 0
-                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} via n8n workflow`
-                : "Querying n8n workflow..."}
+                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} via n8n workflow + faculty uploads`
+                : "Querying n8n workflow + faculty uploads..."}
             </p>
           </div>
         </div>
@@ -512,12 +570,35 @@ function ResultCard({
   const colors = typeColorMap[item.type]
   const Icon = typeIconMap[item.type]
 
+  const isClickable = !!(item.backendMaterial || item.supabaseMaterial)
+
+  const handleClick = () => {
+    if (item.backendMaterial) {
+      onView?.()
+    } else if (item.supabaseMaterial) {
+      const url =
+        item.supabaseMaterial.file_url || item.supabaseMaterial.external_url
+      if (url) window.open(url, "_blank", "noopener,noreferrer")
+    }
+  }
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (item.backendMaterial) {
+      downloadMaterial(item.backendMaterial)
+    } else if (item.supabaseMaterial) {
+      const url =
+        item.supabaseMaterial.file_url || item.supabaseMaterial.external_url
+      if (url) window.open(url, "_blank", "noopener,noreferrer")
+    }
+  }
+
   return (
     <div
       className={`glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm ${
-        item.backendMaterial ? "cursor-pointer" : ""
+        isClickable ? "cursor-pointer" : ""
       }`}
-      onClick={() => item.backendMaterial && onView?.()}
+      onClick={handleClick}
     >
       <div
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
@@ -538,6 +619,14 @@ function ResultCard({
           >
             {item.typeLabel}
           </Badge>
+          {item.supabaseMaterial && (
+            <Badge
+              variant="outline"
+              className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]"
+            >
+              Faculty Upload
+            </Badge>
+          )}
           <span className="text-[11px] text-muted-foreground">{item.meta}</span>
           <span className="text-[11px] text-muted-foreground">
             {item.detail}
@@ -555,15 +644,12 @@ function ResultCard({
           </div>
         </div>
       </div>
-      {item.backendMaterial ? (
+      {isClickable ? (
         <Button
           variant="ghost"
           size="icon"
           className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation()
-            if (item.backendMaterial) downloadMaterial(item.backendMaterial)
-          }}
+          onClick={handleDownload}
         >
           <Download className="h-3.5 w-3.5" />
           <span className="sr-only">Download</span>
@@ -592,113 +678,155 @@ export function SearchResults({
   const [loading, setLoading] = useState(true)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // Fetch materials from all subjects and build result list
+  // Fetch materials from all subjects + Supabase faculty uploads and build result list
   const fetchAndScoreResults = useCallback(async () => {
-    if (!user?.email) {
-      setResults(STATIC_RESULTS)
-      setLoading(false)
-      return
-    }
-
     setLoading(true)
 
     try {
-      // Fetch subjects with retry for Render cold-start
-      let fetchedSubjects: BackendSubject[] = []
-      const emails = [user.email, "redekarayush07@gmail.com"]
-
-      for (const email of emails) {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            fetchedSubjects = await getSubjects(email)
-            break
-          } catch {
-            if (attempt < 2) {
-              await new Promise((r) => setTimeout(r, 5000))
-            }
-          }
-        }
-        if (fetchedSubjects.length > 0) break
-      }
-      setSubjects(fetchedSubjects)
-
-      if (fetchedSubjects.length === 0) {
-        setResults(STATIC_RESULTS)
-        setLoading(false)
-        return
-      }
-
-      // Fetch materials from all subjects in parallel
-      const materialsPerSubject = await Promise.allSettled(
-        fetchedSubjects.map((s) => getMaterials(s.id))
-      )
-
-      const allMats: BackendMaterial[] = []
-      const subjectScores: Map<number, number> = new Map()
-
-      materialsPerSubject.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          const mats = result.value
-          allMats.push(...mats)
-
-          // Track total relevance score per subject
-          const subjectId = fetchedSubjects[index].id
-          let totalScore = 0
-          for (const mat of mats) {
-            totalScore += scoreRelevance(mat, query)
-          }
-          subjectScores.set(subjectId, totalScore)
-        }
-      })
-
-      setAllMaterials(allMats)
-
-      // Find best subject (highest aggregate relevance)
-      let bestId: number | null = null
-      let bestScore = 0
-      subjectScores.forEach((score, id) => {
-        if (score > bestScore) {
-          bestScore = score
-          bestId = id
-        }
-      })
-
-      if (bestId !== null) {
-        const best = fetchedSubjects.find((s) => s.id === bestId) || null
-        setBestSubject(best)
-      }
-
-      // Score and map backend materials to result items
-      const backendResults: ResultItem[] = allMats
-        .map((mat) => ({
-          title: mat.description || mat.filePath || "Untitled Material",
-          type: mapTypeToFilter(mat.type),
-          typeLabel: mapTypeLabel(mat.type),
-          subject: mat.subject?.name || "Unknown Subject",
-          author: mat.subject?.department || "Institution",
-          meta: mat.type === "VIDEO" ? "Video" : "Document",
-          match: scoreRelevance(mat, query),
-          detail: mat.subject?.name || "",
-          backendMaterial: mat,
-        }))
-        .filter((r) => r.match > 0) // only keep items with some relevance
-        .sort((a, b) => b.match - a.match)
-
-      // Merge with static fallbacks if fewer than 5 backend results
-      let combined = [...backendResults]
-      if (backendResults.length < 5) {
-        const staticToAdd = STATIC_RESULTS.slice(
-          0,
-          5 - backendResults.length
+      // ----- 1. Fetch from Supabase faculty_materials (always available) -----
+      let supabaseResults: ResultItem[] = []
+      try {
+        const supaRes = await fetch(
+          `/api/faculty-materials?search=${encodeURIComponent(query)}&limit=50`
         )
+        if (supaRes.ok) {
+          const supaData = await supaRes.json()
+          const supaMaterials: SupabaseMaterial[] = supaData.materials || []
+
+          supabaseResults = supaMaterials
+            .map((mat) => ({
+              title: mat.title || "Untitled",
+              type: mapSupabaseTypeToFilter(mat.type),
+              typeLabel:
+                mat.type === "PDF"
+                  ? "Faculty Notes"
+                  : mat.type === "VIDEO"
+                    ? "Video Lecture"
+                    : "Faculty Resource",
+              subject: mat.subject || "General",
+              author: mat.faculty_name || "Faculty",
+              meta:
+                mat.type === "PDF"
+                  ? "Uploaded File"
+                  : mat.type === "VIDEO"
+                    ? "Video"
+                    : "Link",
+              match: scoreSupabaseMaterial(mat, query),
+              detail: mat.tags?.slice(0, 3).join(", ") || mat.subject,
+              supabaseMaterial: mat,
+            }))
+            .filter((r) => r.match > 0)
+            .sort((a, b) => b.match - a.match)
+        }
+      } catch {
+        // Supabase query failed -- continue with backend results
+      }
+
+      // ----- 2. Fetch from old backend (may be offline) -----
+      let backendResults: ResultItem[] = []
+
+      if (user?.email) {
+        try {
+          let fetchedSubjects: BackendSubject[] = []
+          const emails = [user.email, "redekarayush07@gmail.com"]
+
+          for (const email of emails) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                fetchedSubjects = await getSubjects(email)
+                break
+              } catch {
+                if (attempt < 1) {
+                  await new Promise((r) => setTimeout(r, 3000))
+                }
+              }
+            }
+            if (fetchedSubjects.length > 0) break
+          }
+          setSubjects(fetchedSubjects)
+
+          if (fetchedSubjects.length > 0) {
+            const materialsPerSubject = await Promise.allSettled(
+              fetchedSubjects.map((s) => getMaterials(s.id))
+            )
+
+            const allMats: BackendMaterial[] = []
+            const subjectScores: Map<number, number> = new Map()
+
+            materialsPerSubject.forEach((result, index) => {
+              if (result.status === "fulfilled") {
+                const mats = result.value
+                allMats.push(...mats)
+
+                const subjectId = fetchedSubjects[index].id
+                let totalScore = 0
+                for (const mat of mats) {
+                  totalScore += scoreRelevance(mat, query)
+                }
+                subjectScores.set(subjectId, totalScore)
+              }
+            })
+
+            setAllMaterials(allMats)
+
+            let bestId: number | null = null
+            let bestScore = 0
+            subjectScores.forEach((score, id) => {
+              if (score > bestScore) {
+                bestScore = score
+                bestId = id
+              }
+            })
+
+            if (bestId !== null) {
+              const best =
+                fetchedSubjects.find((s) => s.id === bestId) || null
+              setBestSubject(best)
+            }
+
+            backendResults = allMats
+              .map((mat) => ({
+                title:
+                  mat.description || mat.filePath || "Untitled Material",
+                type: mapTypeToFilter(mat.type),
+                typeLabel: mapTypeLabel(mat.type),
+                subject: mat.subject?.name || "Unknown Subject",
+                author: mat.subject?.department || "Institution",
+                meta: mat.type === "VIDEO" ? "Video" : "Document",
+                match: scoreRelevance(mat, query),
+                detail: mat.subject?.name || "",
+                backendMaterial: mat,
+              }))
+              .filter((r) => r.match > 0)
+              .sort((a, b) => b.match - a.match)
+          }
+        } catch {
+          // Backend offline -- backendResults stays empty
+        }
+      }
+
+      // ----- 3. Merge all sources -----
+      let combined = [...supabaseResults, ...backendResults]
+
+      // Add static fallbacks if fewer than 3 real results
+      if (combined.length < 3) {
+        const staticToAdd = STATIC_RESULTS.slice(0, 5 - combined.length)
         combined = [...combined, ...staticToAdd]
       }
+
+      // Deduplicate by title (prefer Supabase / backend over static)
+      const seen = new Set<string>()
+      combined = combined.filter((item) => {
+        const key = item.title.toLowerCase().trim()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
 
       // Sort by match score descending
       combined.sort((a, b) => b.match - a.match)
       setResults(combined)
     } catch {
-      // Backend unavailable -- show static fallbacks
       setResults(STATIC_RESULTS)
     } finally {
       setLoading(false)
