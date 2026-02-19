@@ -710,27 +710,46 @@ export function FacultyMode() {
   const [activeTab, setActiveTab] = useState<TabId>("material")
   const [subjects, setSubjects] = useState<SubjectData[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
+  const [subjectsError, setSubjectsError] = useState(false)
 
-  // Load subjects from backend -- direct fetch, no service import
-  useEffect(() => {
+  // Load subjects from backend with automatic retry for cold starts
+  const fetchSubjects = useCallback(async () => {
     if (!user?.email) {
       setSubjectsLoading(false)
       return
     }
     setSubjectsLoading(true)
-    fetch(
-      `${API}/academic/subjects?email=${encodeURIComponent(user.email)}`
-    )
-      .then(async (res) => {
+    setSubjectsError(false)
+
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 4000 // 4 seconds between retries for cold-start
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(
+          `${API}/academic/subjects?email=${encodeURIComponent(user.email)}`
+        )
         if (!res.ok) throw new Error("Backend error")
         const data = await res.json()
         setSubjects(data)
-      })
-      .catch(() => {
-        // Backend unavailable -- tabs will show "No subjects found"
-      })
-      .finally(() => setSubjectsLoading(false))
+        setSubjectsError(false)
+        setSubjectsLoading(false)
+        return
+      } catch {
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY))
+        }
+      }
+    }
+
+    // All retries failed
+    setSubjectsError(true)
+    setSubjectsLoading(false)
   }, [user?.email])
+
+  useEffect(() => {
+    fetchSubjects()
+  }, [fetchSubjects])
 
   const tabs: { id: TabId; label: string; icon: typeof FileText }[] = [
     { id: "material", label: "Add Material", icon: LinkIcon },
