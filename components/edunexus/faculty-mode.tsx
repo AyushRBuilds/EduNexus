@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { EduNexusLogo } from "./edunexus-logo"
 import {
   Upload,
@@ -48,39 +48,12 @@ interface SubjectData {
 /* ============================================================
    Tab 1: Add Standard Material (LINK or VIDEO)
    ============================================================ */
-function SubjectsUnavailable({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-amber-400">
-          Could not load subjects
-        </p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
-          The backend may be cold-starting. This usually takes 20-30 seconds.
-        </p>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0 h-7 text-[11px] border-amber-500/20 text-amber-400 hover:bg-amber-500/10 gap-1.5"
-        onClick={onRetry}
-      >
-        <Loader2 className="h-3 w-3" />
-        Retry
-      </Button>
-    </div>
-  )
-}
-
 function AddMaterialTab({
   subjects,
   subjectsLoading,
-  onRetry,
 }: {
   subjects: SubjectData[]
   subjectsLoading: boolean
-  onRetry: () => void
 }) {
   const [subjectId, setSubjectId] = useState("")
   const [type, setType] = useState<"LINK" | "VIDEO">("LINK")
@@ -140,7 +113,7 @@ function AddMaterialTab({
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Loading subjects (backend may need ~30s to wake up)...
+              Loading...
             </div>
           ) : subjects.length > 0 ? (
             <Select value={subjectId} onValueChange={setSubjectId}>
@@ -156,8 +129,10 @@ function AddMaterialTab({
               </SelectContent>
             </Select>
           ) : (
-            <SubjectsUnavailable onRetry={onRetry} />
-          )
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found. Backend may be offline.
+            </p>
+          )}
         </div>
 
         {/* Type */}
@@ -259,11 +234,9 @@ function AddMaterialTab({
 function UploadPdfTab({
   subjects,
   subjectsLoading,
-  onRetry,
 }: {
   subjects: SubjectData[]
   subjectsLoading: boolean
-  onRetry: () => void
 }) {
   const [subjectId, setSubjectId] = useState("")
   const [description, setDescription] = useState("")
@@ -333,7 +306,7 @@ function UploadPdfTab({
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Loading subjects (backend may need ~30s to wake up)...
+              Loading...
             </div>
           ) : subjects.length > 0 ? (
             <Select value={subjectId} onValueChange={setSubjectId}>
@@ -349,7 +322,9 @@ function UploadPdfTab({
               </SelectContent>
             </Select>
           ) : (
-            <SubjectsUnavailable onRetry={onRetry} />
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
           )}
         </div>
 
@@ -486,11 +461,9 @@ function UploadPdfTab({
 function AskAiTab({
   subjects,
   subjectsLoading,
-  onRetry,
 }: {
   subjects: SubjectData[]
   subjectsLoading: boolean
-  onRetry: () => void
 }) {
   const [subjectId, setSubjectId] = useState("")
   const [question, setQuestion] = useState("")
@@ -541,7 +514,7 @@ function AskAiTab({
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Loading subjects (backend may need ~30s to wake up)...
+              Loading...
             </div>
           ) : subjects.length > 0 ? (
             <Select value={subjectId} onValueChange={setSubjectId}>
@@ -557,7 +530,9 @@ function AskAiTab({
               </SelectContent>
             </Select>
           ) : (
-            <SubjectsUnavailable onRetry={onRetry} />
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
           )}
         </div>
 
@@ -825,21 +800,18 @@ export function FacultyMode() {
               <AddMaterialTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                onRetry={fetchSubjects}
               />
             )}
             {activeTab === "upload" && (
               <UploadPdfTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                onRetry={fetchSubjects}
               />
             )}
             {activeTab === "ai" && (
               <AskAiTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                onRetry={fetchSubjects}
               />
             )}
           </div>
