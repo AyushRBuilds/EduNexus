@@ -12,6 +12,12 @@ import {
   Lightbulb,
   CheckCircle2,
   Loader2,
+  Link as LinkIcon,
+  Video,
+  BrainCircuit,
+  Send,
+  BookOpen,
+  X,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,221 +29,444 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "./auth-context"
 import { getSubjects, uploadMaterial, addMaterial } from "@/lib/api/academic.service"
-import type { BackendSubject, BackendMaterial } from "@/lib/api/types"
+import { aiExplain } from "@/lib/api/ai.service"
+import type { BackendSubject, AIExplainResponse } from "@/lib/api/types"
 
-/* ----- Upload Panel ----- */
-function UploadPanel() {
-  const { user } = useAuth()
-  const [subjects, setSubjects] = useState<BackendSubject[]>([])
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+/* ============================================================
+   Tab 1: Add Standard Material (LINK or VIDEO)
+   ============================================================ */
+function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+  const [subjectId, setSubjectId] = useState("")
+  const [type, setType] = useState<"LINK" | "VIDEO">("LINK")
+  const [filePath, setFilePath] = useState("")
   const [description, setDescription] = useState("")
-  const [files, setFiles] = useState<{ name: string; status: "uploading" | "indexed" | "error"; error?: string }[]>([])
-  const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [subjectsLoading, setSubjectsLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  // Load subjects from backend
-  useEffect(() => {
-    if (!user?.email) {
-      setSubjectsLoading(false)
-      return
-    }
-    setSubjectsLoading(true)
-    getSubjects(user.email)
-      .then((data) => {
-        setSubjects(data)
-        if (data.length > 0) {
-          setSelectedSubjectId(String(data[0].id))
-        }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!subjectId || !filePath) return
+
+    setLoading(true)
+    setMessage(null)
+
+    try {
+      await addMaterial({
+        subjectId: Number(subjectId),
+        type,
+        filePath,
+        description,
+        content: "",
       })
-      .catch(() => {
-        // Backend unavailable
+      setMessage({ type: "success", text: "Material added successfully!" })
+      setFilePath("")
+      setDescription("")
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to add material",
       })
-      .finally(() => setSubjectsLoading(false))
-  }, [user?.email])
-
-  const handleFileUpload = async (fileList: FileList | File[]) => {
-    const subjectId = Number(selectedSubjectId)
-    if (!subjectId) return
-
-    const newFiles = Array.from(fileList)
-    for (const file of newFiles) {
-      const fileName = file.name
-      setFiles((prev) => [...prev, { name: fileName, status: "uploading" }])
-      setUploading(true)
-
-      try {
-        await uploadMaterial(subjectId, "PDF", file, description || undefined)
-        setFiles((prev) =>
-          prev.map((f) => (f.name === fileName ? { ...f, status: "indexed" } : f))
-        )
-      } catch (err) {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.name === fileName
-              ? { ...f, status: "error", error: err instanceof Error ? err.message : "Upload failed" }
-              : f
-          )
-        )
-      } finally {
-        setUploading(false)
-      }
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="glass rounded-2xl p-6">
-      <h3 className="mb-4 text-sm font-semibold text-foreground">
-        Content Upload & Indexing
-      </h3>
-
-      {/* Subject selector */}
-      <div className="mb-4 space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Subject */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Target Subject</label>
+          <label className="text-xs font-medium text-muted-foreground">Subject</label>
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Loading subjects...
+              Loading...
             </div>
           ) : subjects.length > 0 ? (
-            <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+            <Select value={subjectId} onValueChange={setSubjectId}>
               <SelectTrigger className="bg-secondary/30 border-border/40">
-                <SelectValue placeholder="Select a subject" />
+                <SelectValue placeholder="Select subject" />
               </SelectTrigger>
               <SelectContent>
                 {subjects.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>
-                    {s.name} ({s.department}, Sem {s.semester})
+                    {s.name} (Sem {s.semester})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           ) : (
-            <p className="text-xs text-amber-400 py-2">
-              No subjects available. Backend may be offline.
-            </p>
+            <p className="text-xs text-amber-400 py-2">No subjects found. Backend may be offline.</p>
           )}
         </div>
+
+        {/* Type */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Description (optional)</label>
+          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <Select value={type} onValueChange={(v) => setType(v as "LINK" | "VIDEO")}>
+            <SelectTrigger className="bg-secondary/30 border-border/40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="LINK">
+                <span className="flex items-center gap-2"><LinkIcon className="h-3 w-3" /> Link</span>
+              </SelectItem>
+              <SelectItem value="VIDEO">
+                <span className="flex items-center gap-2"><Video className="h-3 w-3" /> Video</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* URL */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">
+          {type === "LINK" ? "File Path / URL" : "Video URL"}
+        </label>
+        <Input
+          value={filePath}
+          onChange={(e) => setFilePath(e.target.value)}
+          placeholder={type === "LINK" ? "https://example.com/notes.pdf" : "https://youtube.com/watch?v=..."}
+          className="bg-secondary/30 border-border/40"
+          required
+        />
+      </div>
+
+      {/* Description */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Description</label>
+        <Input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Brief description of the resource"
+          className="bg-secondary/30 border-border/40"
+        />
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+            message.type === "success"
+              ? "border-green-500/20 bg-green-500/10 text-green-400"
+              : "border-red-500/20 bg-red-500/10 text-red-400"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          )}
+          {message.text}
+        </div>
+      )}
+
+      <Button
+        type="submit"
+        disabled={loading || !subjectId || !filePath}
+        className="w-full gap-2"
+      >
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
+        {loading ? "Adding..." : "Add Material"}
+      </Button>
+    </form>
+  )
+}
+
+/* ============================================================
+   Tab 2: Upload PDF Notes
+   ============================================================ */
+function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+  const [subjectId, setSubjectId] = useState("")
+  const [description, setDescription] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!subjectId || !selectedFile) return
+
+    setLoading(true)
+    setMessage(null)
+
+    try {
+      await uploadMaterial(Number(subjectId), "PDF", selectedFile, description || undefined)
+      setMessage({ type: "success", text: `"${selectedFile.name}" uploaded and indexed successfully!` })
+      setSelectedFile(null)
+      setDescription("")
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Upload failed",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFileDrop = (files: FileList) => {
+    const pdf = Array.from(files).find((f) => f.name.endsWith(".pdf"))
+    if (pdf) setSelectedFile(pdf)
+  }
+
+  return (
+    <form onSubmit={handleUpload} className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Subject */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Subject</label>
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={subjectId} onValueChange={setSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select subject" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} (Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">No subjects found.</p>
+          )}
+        </div>
+
+        {/* Description */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Description</label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. Chapter 1: Arrays and Linked Lists"
+            placeholder="e.g. Chapter 1: Arrays"
             className="bg-secondary/30 border-border/40"
           />
         </div>
       </div>
 
+      {/* Drag & drop zone */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault()
           setDragging(false)
-          if (e.dataTransfer.files.length > 0) {
-            handleFileUpload(e.dataTransfer.files)
-          }
+          if (e.dataTransfer.files.length > 0) handleFileDrop(e.dataTransfer.files)
         }}
-        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
-          dragging
-            ? "border-primary bg-primary/5"
-            : "border-border bg-secondary/20"
+        className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
+          dragging ? "border-primary bg-primary/5" : "border-border bg-secondary/20"
         }`}
       >
-        <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
-        <p className="text-sm text-foreground">
-          Drag & drop files here
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          PDFs, Slides, Videos, Documents
-        </p>
-        <label className="mt-3 cursor-pointer">
-          <input
-            type="file"
-            accept=".pdf,.ppt,.pptx,.doc,.docx"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                handleFileUpload(e.target.files)
-              }
-            }}
-          />
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
-            <Upload className="h-3 w-3" />
-            Browse Files
-          </span>
-        </label>
+        {selectedFile ? (
+          <div className="flex flex-col items-center gap-2">
+            <FileText className="h-10 w-10 text-primary" />
+            <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedFile(null)}
+              className="mt-1 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <X className="h-3 w-3" />
+              Remove
+            </button>
+          </div>
+        ) : (
+          <>
+            <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-foreground">Drag & drop a PDF here</p>
+            <p className="mt-1 text-xs text-muted-foreground">or click to browse</p>
+            <label className="mt-3 cursor-pointer">
+              <input
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) setSelectedFile(e.target.files[0])
+                }}
+              />
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+                <Upload className="h-3 w-3" />
+                Browse Files
+              </span>
+            </label>
+          </>
+        )}
       </div>
 
-      {files.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {files.map((f, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 px-3 py-2"
-            >
-              <FileText className="h-4 w-4 text-primary" />
-              <span className="flex-1 truncate text-sm text-foreground">
-                {f.name}
-              </span>
-              {f.status === "uploading" && (
-                <Badge
-                  variant="outline"
-                  className="border-sky-500/30 bg-sky-500/10 text-sky-400 text-[10px] gap-1"
-                >
-                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  Uploading
-                </Badge>
-              )}
-              {f.status === "indexed" && (
-                <Badge
-                  variant="outline"
-                  className="border-green-500/30 bg-green-500/10 text-green-400 text-[10px]"
-                >
-                  Indexed
-                </Badge>
-              )}
-              {f.status === "error" && (
-                <Badge
-                  variant="outline"
-                  className="border-red-500/30 bg-red-500/10 text-red-400 text-[10px]"
-                  title={f.error}
-                >
-                  Error
-                </Badge>
-              )}
-            </div>
-          ))}
+      {/* Message */}
+      {message && (
+        <div
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+            message.type === "success"
+              ? "border-green-500/20 bg-green-500/10 text-green-400"
+              : "border-red-500/20 bg-red-500/10 text-red-400"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          )}
+          {message.text}
         </div>
       )}
 
-      {/* AI Preview */}
-      <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
-        <EduNexusLogo size={16} className="mt-0.5" />
+      <Button
+        type="submit"
+        disabled={loading || !subjectId || !selectedFile}
+        className="w-full gap-2"
+      >
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        {loading ? "Uploading..." : "Upload & Index PDF"}
+      </Button>
+
+      {/* AI index info */}
+      <div className="flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
+        <EduNexusLogo size={16} className="mt-0.5 shrink-0" />
         <div>
-          <p className="text-xs font-medium text-foreground">
-            AI Auto-Index Preview
-          </p>
+          <p className="text-xs font-medium text-foreground">AI Auto-Index</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Uploaded PDFs will be automatically parsed (text extracted via PDFBox), 
-            and indexed for semantic search. The AI can then answer questions based 
-            on the uploaded content.
+            PDFs are parsed via PDFBox, text is extracted and indexed for semantic search.
+            Students can then ask the AI questions grounded in your uploaded content.
           </p>
         </div>
       </div>
+    </form>
+  )
+}
+
+/* ============================================================
+   Tab 3: Ask the AI
+   ============================================================ */
+function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+  const [subjectId, setSubjectId] = useState("")
+  const [question, setQuestion] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [answer, setAnswer] = useState<AIExplainResponse | null>(null)
+  const [error, setError] = useState("")
+
+  const handleAsk = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!subjectId || !question.trim()) return
+
+    setLoading(true)
+    setAnswer(null)
+    setError("")
+
+    try {
+      const res = await aiExplain(question.trim(), Number(subjectId))
+      setAnswer(res)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI request failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <form onSubmit={handleAsk} className="space-y-4">
+        {/* Subject */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Subject Context</label>
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={subjectId} onValueChange={setSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select subject for context" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} (Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">No subjects found.</p>
+          )}
+        </div>
+
+        {/* Question */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Your Question</label>
+          <Textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="e.g. Explain the concept of dynamic programming with examples..."
+            className="min-h-[120px] bg-secondary/30 border-border/40 resize-none"
+            required
+          />
+        </div>
+
+        <Button
+          type="submit"
+          disabled={loading || !subjectId || !question.trim()}
+          className="w-full gap-2"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {loading ? "Thinking..." : "Ask AI"}
+        </Button>
+      </form>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* AI Answer */}
+      {answer && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <EduNexusLogo size={18} />
+            <h4 className="text-sm font-semibold text-foreground">AI Response</h4>
+          </div>
+          <div className="text-sm leading-relaxed text-secondary-foreground whitespace-pre-wrap">
+            {answer.answer || answer.message || JSON.stringify(answer, null, 2)}
+          </div>
+          {answer.scholarLink && (
+            <a
+              href={answer.scholarLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              <BookOpen className="h-3 w-3" />
+              View on Google Scholar
+            </a>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-/* ----- Engagement Insights ----- */
+/* ============================================================
+   Engagement Insights (sidebar panel)
+   ============================================================ */
 function EngagementInsights() {
   const insights = [
     {
@@ -300,7 +529,9 @@ function EngagementInsights() {
   )
 }
 
-/* ----- AI Recommendations ----- */
+/* ============================================================
+   AI Recommendations (sidebar panel)
+   ============================================================ */
 function AIRecommendations() {
   const suggestions = [
     "Create supplementary examples for partial fraction decomposition",
@@ -332,8 +563,38 @@ function AIRecommendations() {
   )
 }
 
-/* ----- Faculty Mode Root ----- */
+/* ============================================================
+   Faculty Mode Root - 3 Tabbed Dashboard
+   ============================================================ */
+type TabId = "material" | "upload" | "ai"
+
 export function FacultyMode() {
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState<TabId>("material")
+  const [subjects, setSubjects] = useState<BackendSubject[]>([])
+  const [subjectsLoading, setSubjectsLoading] = useState(true)
+
+  // Load subjects from backend (shared across all tabs)
+  useEffect(() => {
+    if (!user?.email) {
+      setSubjectsLoading(false)
+      return
+    }
+    setSubjectsLoading(true)
+    getSubjects(user.email)
+      .then((data) => setSubjects(data))
+      .catch(() => {
+        // Backend unavailable
+      })
+      .finally(() => setSubjectsLoading(false))
+  }, [user?.email])
+
+  const tabs: { id: TabId; label: string; icon: typeof FileText }[] = [
+    { id: "material", label: "Add Material", icon: LinkIcon },
+    { id: "upload", label: "Upload PDF", icon: Upload },
+    { id: "ai", label: "Ask the AI", icon: BrainCircuit },
+  ]
+
   return (
     <section className="mx-auto max-w-6xl px-4 pb-16">
       <div className="mb-6 flex items-center gap-3">
@@ -345,14 +606,48 @@ export function FacultyMode() {
             Faculty Studio
           </h2>
           <p className="text-xs text-muted-foreground">
-            Manage content, view analytics, and get AI recommendations
+            Manage content, upload resources, and interact with the AI
           </p>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <UploadPanel />
-        <div className="flex flex-col gap-6">
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Main content - 3 columns */}
+        <div className="lg:col-span-3">
+          <div className="glass rounded-2xl p-6">
+            {/* Tab bar */}
+            <div className="flex gap-1 rounded-xl bg-secondary/30 p-1 mb-6">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all ${
+                    activeTab === tab.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <tab.icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            {activeTab === "material" && (
+              <AddMaterialTab subjects={subjects} subjectsLoading={subjectsLoading} />
+            )}
+            {activeTab === "upload" && (
+              <UploadPdfTab subjects={subjects} subjectsLoading={subjectsLoading} />
+            )}
+            {activeTab === "ai" && (
+              <AskAiTab subjects={subjects} subjectsLoading={subjectsLoading} />
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar insights - 2 columns */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
           <EngagementInsights />
           <AIRecommendations />
         </div>

@@ -36,13 +36,11 @@ async function proxyRequest(
   }
 
   try {
-    console.log("[v0] Proxy forwarding:", req.method, url.toString())
     const backendRes = await fetch(url.toString(), {
       method: req.method,
       headers,
       body,
     })
-    console.log("[v0] Proxy response:", backendRes.status, backendRes.statusText)
 
     const resContentType = backendRes.headers.get("content-type")
     let data: string | ArrayBuffer

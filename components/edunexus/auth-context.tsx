@@ -114,17 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Retry helper for cold-starting Render instances
     const tryLogin = async (retries: number): Promise<FrontendUser> => {
       try {
-        console.log("[v0] Attempting login via proxy for:", email, "retries left:", retries)
         const backendUser = await loginUser(email)
-        console.log("[v0] Backend login success:", backendUser)
         return mapBackendUserToFrontend(backendUser)
       } catch (err) {
-        console.log("[v0] Login attempt failed:", err instanceof ApiError ? `ApiError ${err.status}: ${err.message}` : String(err))
         // 502/503 = proxy reached backend but it's still waking up
         const isServerWaking =
           err instanceof ApiError && (err.status === 502 || err.status === 503)
         if (isServerWaking && retries > 0) {
-          console.log("[v0] Backend waking up, retrying in 3s...")
           await new Promise((r) => setTimeout(r, 3000))
           return tryLogin(retries - 1)
         }
@@ -138,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(frontendUser)
       return { success: true }
     } catch (err) {
-      console.log("[v0] All login attempts failed, error type:", err instanceof ApiError ? "ApiError" : "Other", err)
       // If backend returned a real error (e.g. 401/404 user not found)
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
         return {

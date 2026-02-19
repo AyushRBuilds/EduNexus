@@ -1,6 +1,7 @@
 /**
- * All browser requests go to /api/proxy/... which forwards server-side
- * to the real backend. This eliminates CORS issues entirely.
+ * All browser requests go through /api/proxy/... which forwards server-side
+ * to the real backend. This completely eliminates CORS issues.
+ * Cache-bust: v10
  */
 const PROXY_BASE = "/api/proxy"
 
