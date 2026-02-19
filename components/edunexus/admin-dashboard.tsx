@@ -353,16 +353,22 @@ export function AdminDashboard() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // Load subjects and materials from backend
+  // Load subjects and materials from backend with retry for cold-start
   useEffect(() => {
     if (!user?.email) {
       setLoading(false)
       return
     }
 
-    setLoading(true)
-    getSubjects(user.email)
-      .then(async (subjectsData) => {
+    let cancelled = false
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 8000
+
+    async function fetchWithRetry(attempt: number) {
+      if (cancelled) return
+      try {
+        const subjectsData = await getSubjects(user!.email)
+        if (cancelled) return
         setSubjects(subjectsData)
         setBackendConnected(true)
 
@@ -373,15 +379,29 @@ export function AdminDashboard() {
             const m = await getMaterials(subj.id)
             mats.push(...m)
           } catch {
-            // Skip
+            // Skip individual material errors
           }
         }
-        setAllMaterials(mats)
-      })
-      .catch(() => {
-        setBackendConnected(false)
-      })
-      .finally(() => setLoading(false))
+        if (!cancelled) {
+          setAllMaterials(mats)
+          setLoading(false)
+        }
+      } catch {
+        if (cancelled) return
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY))
+          fetchWithRetry(attempt + 1)
+        } else {
+          setBackendConnected(false)
+          setLoading(false)
+        }
+      }
+    }
+
+    setLoading(true)
+    fetchWithRetry(0)
+
+    return () => { cancelled = true }
   }, [user?.email, refreshKey])
 
   return (

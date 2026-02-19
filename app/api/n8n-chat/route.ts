@@ -68,28 +68,14 @@ export async function POST(req: NextRequest) {
       sessionId: `edunexus-${Date.now()}`,
     }
 
-    console.log("[v0] n8n-chat: sending to production URL with payload:", JSON.stringify(payload))
-
     // 1) Try production URL
-    let { res: n8nRes, networkError } = await callWebhook(N8N_PRODUCTION_URL, payload)
-
-    if (networkError) {
-      console.log("[v0] n8n-chat: production network error:", networkError)
-    }
-    if (n8nRes) {
-      console.log("[v0] n8n-chat: production response status:", n8nRes.status)
-    }
+    let { res: n8nRes } = await callWebhook(N8N_PRODUCTION_URL, payload)
 
     // 2) Fall back to test URL if production fails
     if (!n8nRes || n8nRes.status === 404) {
-      console.log("[v0] n8n-chat: trying test URL...")
       const testResult = await callWebhook(N8N_TEST_URL, payload)
-      if (testResult.networkError) {
-        console.log("[v0] n8n-chat: test URL network error:", testResult.networkError)
-      }
       if (testResult.res) {
         n8nRes = testResult.res
-        console.log("[v0] n8n-chat: test URL response status:", n8nRes.status)
       }
     }
 
@@ -107,7 +93,6 @@ export async function POST(req: NextRequest) {
     // 4) n8n returned an error status
     if (!n8nRes.ok) {
       const errorText = await n8nRes.text()
-      console.log("[v0] n8n-chat: error body:", errorText)
       return NextResponse.json(
         {
           error: "n8n workflow error",
@@ -121,7 +106,11 @@ export async function POST(req: NextRequest) {
 
     // 5) Success -- parse the response
     const rawText = await n8nRes.text()
-    console.log("[v0] n8n-chat: raw response body:", rawText.slice(0, 500))
+
+    // Handle empty response body (n8n returns 200 with no body sometimes)
+    if (!rawText || rawText.trim().length === 0) {
+      return NextResponse.json({ output: null, error: "n8n returned an empty response" })
+    }
 
     let answer: string | null = null
     try {
@@ -130,11 +119,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ output: answer, raw: data })
     } catch {
       // Not JSON -- treat as plain text
-      answer = rawText || null
+      answer = rawText
       return NextResponse.json({ output: answer })
     }
   } catch (error) {
-    console.error("[v0] n8n-chat: proxy error:", error)
+    console.error("[Proxy] n8n-chat error:", error)
     return NextResponse.json(
       { error: "Failed to process n8n request" },
       { status: 500 }

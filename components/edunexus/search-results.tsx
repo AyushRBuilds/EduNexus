@@ -224,15 +224,12 @@ function AISynthesisCard({
     n8nChat(query)
       .then((res) => {
         if (res.error || !res.output) {
-          console.log("[v0] n8n returned error or empty:", res.error)
           setN8nError(true)
         } else {
-          console.log("[v0] n8n answer received, length:", res.output.length)
           setN8nAnswer(res.output)
         }
       })
-      .catch((err) => {
-        console.log("[v0] n8n fetch failed:", err)
+      .catch(() => {
         setN8nError(true)
       })
       .finally(() => setN8nLoading(false))
@@ -606,19 +603,22 @@ export function SearchResults({
     setLoading(true)
 
     try {
-      // Try fetching subjects with the user's email; if backend
-      // doesn't know this email, fall back to a well-known demo email
-      // so that the search still returns real uploaded materials.
+      // Fetch subjects with retry for Render cold-start
       let fetchedSubjects: BackendSubject[] = []
-      try {
-        fetchedSubjects = await getSubjects(user.email)
-      } catch {
-        // Backend may not have this user -- try a known demo email
-        try {
-          fetchedSubjects = await getSubjects("redekarayush07@gmail.com")
-        } catch {
-          // Give up on backend subjects
+      const emails = [user.email, "redekarayush07@gmail.com"]
+
+      for (const email of emails) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            fetchedSubjects = await getSubjects(email)
+            break
+          } catch {
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 5000))
+            }
+          }
         }
+        if (fetchedSubjects.length > 0) break
       }
       setSubjects(fetchedSubjects)
 
