@@ -1,5 +1,8 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://edunexus-backend-nv75.onrender.com"
+/**
+ * All browser requests go to /api/proxy/... which forwards server-side
+ * to the real backend. This eliminates CORS issues entirely.
+ */
+const PROXY_BASE = "/api/proxy"
 
 export class ApiError extends Error {
   status: number
@@ -20,19 +23,21 @@ export async function apiClient<T>(
 ): Promise<T> {
   const { body, headers: customHeaders, ...rest } = options
 
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData
+
   const headers: HeadersInit = {
-    ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...customHeaders,
   }
 
   const config: RequestInit = {
     ...rest,
     headers,
-    credentials: "include",
-    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
   }
 
-  const url = `${API_BASE_URL}${endpoint}`
+  // Route through the Next.js proxy: /api/proxy/auth/login -> backend /auth/login
+  const url = `${PROXY_BASE}${endpoint}`
 
   const response = await fetch(url, config)
 
@@ -58,5 +63,5 @@ export async function apiClient<T>(
 }
 
 export function getApiBaseUrl(): string {
-  return API_BASE_URL
+  return process.env.NEXT_PUBLIC_API_BASE_URL || "https://edunexus-backend-nv75.onrender.com"
 }
