@@ -243,12 +243,10 @@ function AISynthesisCard({
 
     n8nChat(query)
       .then((res) => {
-        if (res.error) {
+        if (res.error || !res.output) {
           setN8nError(true)
         } else {
-          // n8n may return the answer in different fields depending on workflow config
-          const answer = res.output || res.text || res.response || res.message || null
-          setN8nAnswer(typeof answer === "string" ? answer : answer ? JSON.stringify(answer) : null)
+          setN8nAnswer(res.output)
         }
       })
       .catch(() => setN8nError(true))
@@ -363,7 +361,7 @@ function AISynthesisCard({
 
           {!n8nLoading && n8nError && (
             <p className="text-xs italic text-muted-foreground">
-              Workflow response unavailable. The n8n automation could not process this query right now.
+              n8n workflow is not responding. Please ensure the workflow is toggled <strong className="font-semibold text-foreground/70">Active</strong> in the n8n editor.
             </p>
           )}
 

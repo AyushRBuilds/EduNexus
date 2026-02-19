@@ -19,18 +19,16 @@ export async function aiExplain(
 /* ---------- n8n Workflow Chat ---------- */
 
 export interface N8nChatResponse {
-  /** The main answer text from the n8n workflow */
-  output?: string
-  /** Error message if the workflow failed */
+  /** The normalised answer text from the n8n workflow */
+  output: string | null
+  /** Hint / error description when something went wrong */
   error?: string
-  /** Any extra data the workflow may return */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
+  hint?: string
 }
 
 /**
- * POST /api/n8n-chat
- * Sends a query to the n8n webhook workflow via the Next.js proxy route.
+ * POST /api/n8n-chat  (proxied to the real n8n webhook)
+ * Sends a search query to the n8n workflow and returns the answer.
  */
 export async function n8nChat(query: string): Promise<N8nChatResponse> {
   const res = await fetch("/api/n8n-chat", {
@@ -41,8 +39,16 @@ export async function n8nChat(query: string): Promise<N8nChatResponse> {
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}))
-    return { error: errBody.error || `n8n request failed (${res.status})` }
+    return {
+      output: null,
+      error: errBody.error || `n8n request failed (${res.status})`,
+      hint: errBody.hint,
+    }
   }
 
-  return res.json()
+  const data = await res.json()
+  return {
+    output: data.output ?? null,
+    error: data.error,
+  }
 }
