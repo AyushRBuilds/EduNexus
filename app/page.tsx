@@ -20,7 +20,7 @@ import { EduNexusLogo } from "@/components/edunexus/edunexus-logo"
 import { InitAnimation } from "@/components/edunexus/init-animation"
 
 export default function EduNexusPage() {
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth()
   const [activeView, setActiveView] = useState<ViewId>("search")
   const [searchQuery, setSearchQuery] = useState("")
   const [hasSearched, setHasSearched] = useState(false)
@@ -30,6 +30,18 @@ export default function EduNexusPage() {
   // Show initialization animation on first load
   if (!initDone) {
     return <InitAnimation onComplete={() => setInitDone(true)} />
+  }
+
+  // Show a loading spinner while Supabase session is being restored
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <EduNexusLogo size={48} />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      </div>
+    )
   }
 
   // Show login if not authenticated
