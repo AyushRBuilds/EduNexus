@@ -1,7 +1,8 @@
 /**
- * API client - All requests go through /api/proxy/... (Next.js API route)
- * which forwards server-side to the backend. This avoids CORS entirely.
+ * All browser requests go to /api/proxy/... which forwards server-side
+ * to the real backend. This eliminates CORS issues entirely.
  */
+const PROXY_BASE = "/api/proxy"
 
 export class ApiError extends Error {
   status: number
@@ -35,37 +36,32 @@ export async function apiClient<T>(
     body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
   }
 
-  // All requests go through the Next.js proxy route to avoid CORS
-  const url = `/api/proxy${endpoint}`
-  console.log("[v0] apiClient fetching:", url, "method:", config.method || "GET")
+  // Route through the Next.js proxy: /api/proxy/auth/login -> backend /auth/login
+  const url = `${PROXY_BASE}${endpoint}`
 
   const response = await fetch(url, config)
-  console.log("[v0] apiClient response status:", response.status)
 
   if (!response.ok) {
     let errorMessage: string
-    const ct = response.headers.get("content-type")
-    if (ct?.includes("application/json")) {
+    const contentType = response.headers.get("content-type")
+    if (contentType?.includes("application/json")) {
       const errorBody = await response.json()
-      errorMessage = errorBody.message || errorBody.error || JSON.stringify(errorBody)
+      errorMessage =
+        errorBody.message || errorBody.error || JSON.stringify(errorBody)
     } else {
       errorMessage = await response.text()
     }
     throw new ApiError(errorMessage || response.statusText, response.status)
   }
 
-  const ct = response.headers.get("content-type")
-  if (ct?.includes("application/json")) {
+  const contentType = response.headers.get("content-type")
+  if (contentType?.includes("application/json")) {
     return response.json() as Promise<T>
   }
 
   return response.text() as unknown as T
 }
 
-/** Returns the backend base URL (only used server-side by the proxy route) */
-export function getBackendUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://edunexus-backend-nv75.onrender.com"
-  )
+export function getApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_BASE_URL || "https://edunexus-backend-nv75.onrender.com"
 }

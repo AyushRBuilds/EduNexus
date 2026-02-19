@@ -53,21 +53,8 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [loadingHint, setLoadingHint] = useState("")
 
   useEffect(() => { setMounted(true) }, [])
-
-  // Show hint if login takes long (Render cold start)
-  useEffect(() => {
-    if (!loading) {
-      setLoadingHint("")
-      return
-    }
-    const t1 = setTimeout(() => setLoadingHint("Connecting to server..."), 2000)
-    const t2 = setTimeout(() => setLoadingHint("Server is waking up, please wait..."), 6000)
-    const t3 = setTimeout(() => setLoadingHint("Almost there, Render free-tier cold start..."), 12000)
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
-  }, [loading])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -261,13 +248,6 @@ export function LoginPage() {
             {error && (
               <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">
                 {error}
-              </div>
-            )}
-
-            {loading && loadingHint && (
-              <div className="text-sm text-sky-400 bg-sky-500/10 border border-sky-500/20 rounded-xl px-4 py-2.5 flex items-center gap-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                {loadingHint}
               </div>
             )}
 
