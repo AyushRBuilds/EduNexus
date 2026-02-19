@@ -31,38 +31,66 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "./auth-context"
-import { getSubjects, uploadMaterial, addMaterial } from "@/lib/api/academic.service"
-import { aiExplain } from "@/lib/api/ai.service"
-import type { BackendSubject, AIExplainResponse } from "@/lib/api/types"
+
+/**
+ * All API calls go through /api/proxy which forwards server-side
+ * to the real backend (https://edunexus-backend-nv75.onrender.com).
+ * This avoids CORS issues entirely.
+ */
+const API = "/api/proxy"
+
+interface SubjectData {
+  id: number
+  name: string
+  semester: number
+}
 
 /* ============================================================
    Tab 1: Add Standard Material (LINK or VIDEO)
    ============================================================ */
-function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+function AddMaterialTab({
+  subjects,
+  subjectsLoading,
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [type, setType] = useState<"LINK" | "VIDEO">("LINK")
-  const [filePath, setFilePath] = useState("")
+  const [url, setUrl] = useState("")
   const [description, setDescription] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState<{
+    type: "success" | "error"
+    text: string
+  } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!subjectId || !filePath) return
+    if (!subjectId || !url) return
 
-    setLoading(true)
+    setIsLoading(true)
     setMessage(null)
 
     try {
-      await addMaterial({
-        subjectId: Number(subjectId),
-        type,
-        filePath,
-        description,
-        content: "",
+      const res = await fetch(`${API}/admin/material`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjectId: Number(subjectId),
+          type,
+          filePath: url,
+          description,
+        }),
       })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || `Server returned ${res.status}`)
+      }
+
       setMessage({ type: "success", text: "Material added successfully!" })
-      setFilePath("")
+      setUrl("")
       setDescription("")
     } catch (err) {
       setMessage({
@@ -70,7 +98,7 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
         text: err instanceof Error ? err.message : "Failed to add material",
       })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
@@ -79,7 +107,9 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Subject */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Subject</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Subject
+          </label>
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -99,23 +129,34 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
               </SelectContent>
             </Select>
           ) : (
-            <p className="text-xs text-amber-400 py-2">No subjects found. Backend may be offline.</p>
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found. Backend may be offline.
+            </p>
           )}
         </div>
 
         {/* Type */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Type</label>
-          <Select value={type} onValueChange={(v) => setType(v as "LINK" | "VIDEO")}>
+          <label className="text-xs font-medium text-muted-foreground">
+            Type
+          </label>
+          <Select
+            value={type}
+            onValueChange={(v) => setType(v as "LINK" | "VIDEO")}
+          >
             <SelectTrigger className="bg-secondary/30 border-border/40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="LINK">
-                <span className="flex items-center gap-2"><LinkIcon className="h-3 w-3" /> Link</span>
+                <span className="flex items-center gap-2">
+                  <LinkIcon className="h-3 w-3" /> Link
+                </span>
               </SelectItem>
               <SelectItem value="VIDEO">
-                <span className="flex items-center gap-2"><Video className="h-3 w-3" /> Video</span>
+                <span className="flex items-center gap-2">
+                  <Video className="h-3 w-3" /> Video
+                </span>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -128,9 +169,13 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
           {type === "LINK" ? "File Path / URL" : "Video URL"}
         </label>
         <Input
-          value={filePath}
-          onChange={(e) => setFilePath(e.target.value)}
-          placeholder={type === "LINK" ? "https://example.com/notes.pdf" : "https://youtube.com/watch?v=..."}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder={
+            type === "LINK"
+              ? "https://example.com/notes.pdf"
+              : "https://youtube.com/watch?v=..."
+          }
           className="bg-secondary/30 border-border/40"
           required
         />
@@ -138,7 +183,9 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
 
       {/* Description */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Description</label>
+        <label className="text-xs font-medium text-muted-foreground">
+          Description
+        </label>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -167,11 +214,15 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
 
       <Button
         type="submit"
-        disabled={loading || !subjectId || !filePath}
+        disabled={isLoading || !subjectId || !url}
         className="w-full gap-2"
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
-        {loading ? "Adding..." : "Add Material"}
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <LinkIcon className="h-4 w-4" />
+        )}
+        {isLoading ? "Processing..." : "Add Material"}
       </Button>
     </form>
   )
@@ -180,24 +231,53 @@ function AddMaterialTab({ subjects, subjectsLoading }: { subjects: BackendSubjec
 /* ============================================================
    Tab 2: Upload PDF Notes
    ============================================================ */
-function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+function UploadPdfTab({
+  subjects,
+  subjectsLoading,
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [description, setDescription] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState<{
+    type: "success" | "error"
+    text: string
+  } | null>(null)
   const [dragging, setDragging] = useState(false)
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!subjectId || !selectedFile) return
 
-    setLoading(true)
+    setIsLoading(true)
     setMessage(null)
 
     try {
-      await uploadMaterial(Number(subjectId), "PDF", selectedFile, description || undefined)
-      setMessage({ type: "success", text: `"${selectedFile.name}" uploaded and indexed successfully!` })
+      const formData = new FormData()
+      formData.append("subjectId", subjectId)
+      formData.append("type", "PDF")
+      formData.append("description", description || selectedFile.name)
+      formData.append("file", selectedFile)
+
+      // CRITICAL: Do NOT set Content-Type header. The browser must set it
+      // automatically with the correct multipart boundary.
+      const res = await fetch(`${API}/admin/upload`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || `Server returned ${res.status}`)
+      }
+
+      setMessage({
+        type: "success",
+        text: `"${selectedFile.name}" uploaded and indexed successfully!`,
+      })
       setSelectedFile(null)
       setDescription("")
     } catch (err) {
@@ -206,7 +286,7 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
         text: err instanceof Error ? err.message : "Upload failed",
       })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
@@ -220,7 +300,9 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Subject */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Subject</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Subject
+          </label>
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -240,13 +322,17 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
               </SelectContent>
             </Select>
           ) : (
-            <p className="text-xs text-amber-400 py-2">No subjects found.</p>
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
           )}
         </div>
 
         {/* Description */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Description</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Description
+          </label>
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -258,21 +344,29 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
 
       {/* Drag & drop zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault()
           setDragging(false)
-          if (e.dataTransfer.files.length > 0) handleFileDrop(e.dataTransfer.files)
+          if (e.dataTransfer.files.length > 0)
+            handleFileDrop(e.dataTransfer.files)
         }}
         className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
-          dragging ? "border-primary bg-primary/5" : "border-border bg-secondary/20"
+          dragging
+            ? "border-primary bg-primary/5"
+            : "border-border bg-secondary/20"
         }`}
       >
         {selectedFile ? (
           <div className="flex flex-col items-center gap-2">
             <FileText className="h-10 w-10 text-primary" />
-            <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+            <p className="text-sm font-medium text-foreground">
+              {selectedFile.name}
+            </p>
             <p className="text-xs text-muted-foreground">
               {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
             </p>
@@ -288,8 +382,12 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
         ) : (
           <>
             <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-foreground">Drag & drop a PDF here</p>
-            <p className="mt-1 text-xs text-muted-foreground">or click to browse</p>
+            <p className="text-sm text-foreground">
+              Drag & drop a PDF here
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              or click to browse
+            </p>
             <label className="mt-3 cursor-pointer">
               <input
                 type="file"
@@ -328,21 +426,28 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
 
       <Button
         type="submit"
-        disabled={loading || !subjectId || !selectedFile}
+        disabled={isLoading || !subjectId || !selectedFile}
         className="w-full gap-2"
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-        {loading ? "Uploading..." : "Upload & Index PDF"}
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Upload className="h-4 w-4" />
+        )}
+        {isLoading ? "Processing..." : "Upload & Index PDF"}
       </Button>
 
       {/* AI index info */}
       <div className="flex items-start gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4">
         <EduNexusLogo size={16} className="mt-0.5 shrink-0" />
         <div>
-          <p className="text-xs font-medium text-foreground">AI Auto-Index</p>
+          <p className="text-xs font-medium text-foreground">
+            AI Auto-Index
+          </p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            PDFs are parsed via PDFBox, text is extracted and indexed for semantic search.
-            Students can then ask the AI questions grounded in your uploaded content.
+            PDFs are parsed via PDFBox, text is extracted and indexed for
+            semantic search. Students can then ask the AI questions grounded
+            in your uploaded content.
           </p>
         </div>
       </div>
@@ -353,28 +458,48 @@ function UploadPdfTab({ subjects, subjectsLoading }: { subjects: BackendSubject[
 /* ============================================================
    Tab 3: Ask the AI
    ============================================================ */
-function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; subjectsLoading: boolean }) {
+function AskAiTab({
+  subjects,
+  subjectsLoading,
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [question, setQuestion] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [answer, setAnswer] = useState<AIExplainResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [answer, setAnswer] = useState<Record<string, string> | null>(null)
   const [error, setError] = useState("")
 
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!subjectId || !question.trim()) return
 
-    setLoading(true)
+    setIsLoading(true)
     setAnswer(null)
     setError("")
 
     try {
-      const res = await aiExplain(question.trim(), Number(subjectId))
-      setAnswer(res)
+      const res = await fetch(`${API}/ai/explain`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjectId: Number(subjectId),
+          question: question.trim(),
+        }),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || `Server returned ${res.status}`)
+      }
+
+      const data = await res.json()
+      setAnswer(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI request failed")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
@@ -383,7 +508,9 @@ function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; s
       <form onSubmit={handleAsk} className="space-y-4">
         {/* Subject */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Subject Context</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Subject Context
+          </label>
           {subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -403,13 +530,17 @@ function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; s
               </SelectContent>
             </Select>
           ) : (
-            <p className="text-xs text-amber-400 py-2">No subjects found.</p>
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
           )}
         </div>
 
         {/* Question */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Your Question</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Your Question
+          </label>
           <Textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -421,11 +552,15 @@ function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; s
 
         <Button
           type="submit"
-          disabled={loading || !subjectId || !question.trim()}
+          disabled={isLoading || !subjectId || !question.trim()}
           className="w-full gap-2"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {loading ? "Thinking..." : "Ask AI"}
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+          {isLoading ? "Processing..." : "Ask AI"}
         </Button>
       </form>
 
@@ -442,7 +577,9 @@ function AskAiTab({ subjects, subjectsLoading }: { subjects: BackendSubject[]; s
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3">
           <div className="flex items-center gap-2">
             <EduNexusLogo size={18} />
-            <h4 className="text-sm font-semibold text-foreground">AI Response</h4>
+            <h4 className="text-sm font-semibold text-foreground">
+              AI Response
+            </h4>
           </div>
           <div className="text-sm leading-relaxed text-secondary-foreground whitespace-pre-wrap">
             {answer.answer || answer.message || JSON.stringify(answer, null, 2)}
@@ -571,20 +708,26 @@ type TabId = "material" | "upload" | "ai"
 export function FacultyMode() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("material")
-  const [subjects, setSubjects] = useState<BackendSubject[]>([])
+  const [subjects, setSubjects] = useState<SubjectData[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
 
-  // Load subjects from backend (shared across all tabs)
+  // Load subjects from backend -- direct fetch, no service import
   useEffect(() => {
     if (!user?.email) {
       setSubjectsLoading(false)
       return
     }
     setSubjectsLoading(true)
-    getSubjects(user.email)
-      .then((data) => setSubjects(data))
+    fetch(
+      `${API}/academic/subjects?email=${encodeURIComponent(user.email)}`
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Backend error")
+        const data = await res.json()
+        setSubjects(data)
+      })
       .catch(() => {
-        // Backend unavailable
+        // Backend unavailable -- tabs will show "No subjects found"
       })
       .finally(() => setSubjectsLoading(false))
   }, [user?.email])
@@ -635,13 +778,22 @@ export function FacultyMode() {
 
             {/* Tab content */}
             {activeTab === "material" && (
-              <AddMaterialTab subjects={subjects} subjectsLoading={subjectsLoading} />
+              <AddMaterialTab
+                subjects={subjects}
+                subjectsLoading={subjectsLoading}
+              />
             )}
             {activeTab === "upload" && (
-              <UploadPdfTab subjects={subjects} subjectsLoading={subjectsLoading} />
+              <UploadPdfTab
+                subjects={subjects}
+                subjectsLoading={subjectsLoading}
+              />
             )}
             {activeTab === "ai" && (
-              <AskAiTab subjects={subjects} subjectsLoading={subjectsLoading} />
+              <AskAiTab
+                subjects={subjects}
+                subjectsLoading={subjectsLoading}
+              />
             )}
           </div>
         </div>
