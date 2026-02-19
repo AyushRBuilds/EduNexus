@@ -87,10 +87,21 @@ function buildUserFromSupabase(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const [supabase] = useState(() => {
+    try {
+      return createClient()
+    } catch {
+      return null
+    }
+  })
 
   // Restore session on mount and listen for auth changes
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     const restoreSession = async () => {
       try {
         const {
@@ -140,6 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      if (!supabase) {
+        return { success: false, error: "Supabase is not configured. Check your environment variables." }
+      }
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -180,6 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       department: string,
       semester?: number
     ) => {
+      if (!supabase) {
+        return { success: false, error: "Supabase is not configured. Check your environment variables." }
+      }
       try {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -244,7 +261,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut()
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
     setUser(null)
   }, [supabase])
 
