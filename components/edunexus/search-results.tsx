@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { EduNexusLogo } from "./edunexus-logo"
 import {
   BookOpen,
@@ -14,18 +14,19 @@ import {
   Presentation,
   Filter,
   Loader2,
-  AlertTriangle,
+  Sparkles,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
+import { aiExplain } from "@/lib/api/ai.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
-import type { BackendMaterial } from "@/lib/api/types"
+import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
 
 /* ---------- Filter types ---------- */
-type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
+export type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
 
 const FILTERS: { id: ContentFilter; label: string; icon: typeof FileText }[] = [
   { id: "all", label: "All", icon: Filter },
@@ -35,47 +36,203 @@ const FILTERS: { id: ContentFilter; label: string; icon: typeof FileText }[] = [
   { id: "notes", label: "Notes", icon: BookOpen },
 ]
 
-/* ---------- Synthesis Card ---------- */
-function AISynthesisCard({ query }: { query: string }) {
+/* ---------- Relevance scorer ---------- */
+function scoreRelevance(material: BackendMaterial, query: string): number {
+  const q = query.toLowerCase()
+  const tokens = q.split(/\s+/).filter(Boolean)
+  let score = 0
+
+  const desc = (material.description || "").toLowerCase()
+  const content = (material.content || "").toLowerCase()
+  const subject = (material.subject?.name || "").toLowerCase()
+  const filePath = (material.filePath || "").toLowerCase()
+
+  // Full query match (highest weight)
+  if (desc.includes(q)) score += 40
+  if (content.includes(q)) score += 30
+  if (subject.includes(q)) score += 25
+  if (filePath.includes(q)) score += 15
+
+  // Per-token matching
+  for (const token of tokens) {
+    if (token.length < 2) continue
+    if (desc.includes(token)) score += 12
+    if (content.includes(token)) score += 8
+    if (subject.includes(token)) score += 6
+    if (filePath.includes(token)) score += 4
+  }
+
+  // Normalize to 0-100
+  return Math.min(100, Math.max(0, score))
+}
+
+/* ---------- Map backend type to filter type ---------- */
+function mapTypeToFilter(type: string): ContentFilter {
+  switch (type) {
+    case "PDF":
+      return "notes"
+    case "VIDEO":
+      return "video"
+    case "LINK":
+      return "research"
+    default:
+      return "notes"
+  }
+}
+
+function mapTypeLabel(type: string): string {
+  switch (type) {
+    case "PDF":
+      return "Notes / PDF"
+    case "VIDEO":
+      return "Video Lecture"
+    case "LINK":
+      return "Research / Link"
+    default:
+      return "Document"
+  }
+}
+
+/* ---------- Unified result item ---------- */
+interface ResultItem {
+  title: string
+  type: ContentFilter
+  typeLabel: string
+  subject: string
+  author: string
+  meta: string
+  match: number
+  detail: string
+  backendMaterial?: BackendMaterial // present when from backend
+  isStatic?: boolean
+}
+
+/* ---------- Fallback static results ---------- */
+const STATIC_RESULTS: ResultItem[] = [
+  {
+    title: "Laplace Transform: Theory and Applications in Engineering",
+    type: "research",
+    typeLabel: "Research Paper",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "2.4 MB",
+    match: 62,
+    detail: "Cited 45 times",
+    isStatic: true,
+  },
+  {
+    title: "Introduction to Laplace Transform & Properties",
+    type: "video",
+    typeLabel: "Video Lecture",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "45 min",
+    match: 58,
+    detail: "Relevant at 14:32",
+    isStatic: true,
+  },
+  {
+    title: "Integral Transforms - Lecture Slides (Week 7)",
+    type: "ppt",
+    typeLabel: "Presentation",
+    subject: "Applied Mathematics III",
+    author: "Prof. R. Sharma",
+    meta: "5.2 MB",
+    match: 55,
+    detail: "42 slides",
+    isStatic: true,
+  },
+  {
+    title: "Study Material: Unit 4 - Integral Transforms",
+    type: "notes",
+    typeLabel: "Notes",
+    subject: "Department Notes",
+    author: "Dept. of Mathematics",
+    meta: "3.1 MB",
+    match: 50,
+    detail: "Pages 142-158",
+    isStatic: true,
+  },
+  {
+    title: "GATE Preparation: Laplace Transform Problem Set",
+    type: "notes",
+    typeLabel: "Notes",
+    subject: "Exam Prep",
+    author: "Academic Cell",
+    meta: "850 KB",
+    match: 45,
+    detail: "50 problems",
+    isStatic: true,
+  },
+]
+
+/* ---------- Type style map ---------- */
+const typeIconMap: Record<ContentFilter, typeof FileText> = {
+  all: Filter,
+  research: FileText,
+  ppt: Presentation,
+  video: Video,
+  notes: BookOpen,
+}
+
+const typeColorMap: Record<ContentFilter, { text: string; bg: string; border: string }> = {
+  all: { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
+  research: { text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
+  ppt: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+  video: { text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" },
+  notes: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+}
+
+/* ---------- AI Synthesis Card ---------- */
+function AISynthesisCard({
+  query,
+  materials,
+  subjects,
+  bestSubject,
+  materialsLoading,
+}: {
+  query: string
+  materials: BackendMaterial[]
+  subjects: BackendSubject[]
+  bestSubject: BackendSubject | null
+  materialsLoading: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
-  const { user } = useAuth()
-  const [backendMaterials, setBackendMaterials] = useState<BackendMaterial[]>([])
-  const [backendLoading, setBackendLoading] = useState(true)
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState(false)
+  const [scholarLink, setScholarLink] = useState<string | null>(null)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // Attempt to load materials from backend that match the search query
+  // Call /ai/explain when we have a best subject
   useEffect(() => {
-    if (!user?.email) {
-      setBackendLoading(false)
-      return
-    }
-    setBackendLoading(true)
-    getSubjects(user.email)
-      .then(async (subjects) => {
-        // Load materials from all subjects to search through
-        const allMaterials: BackendMaterial[] = []
-        for (const subj of subjects.slice(0, 5)) {
-          try {
-            const mats = await getMaterials(subj.id)
-            allMaterials.push(...mats)
-          } catch {
-            // Skip subjects with errors
-          }
+    if (!bestSubject || !query) return
+
+    setAiLoading(true)
+    setAiError(false)
+    setAiAnswer(null)
+    setScholarLink(null)
+
+    aiExplain(query, bestSubject.id)
+      .then((res) => {
+        if (res.error) {
+          setAiError(true)
+        } else {
+          setAiAnswer(res.answer || res.message || null)
+          setScholarLink(res.scholarLink || null)
         }
-        // Filter materials whose content or description matches the query
-        const q = query.toLowerCase()
-        const matched = allMaterials.filter(
-          (m) =>
-            (m.description && m.description.toLowerCase().includes(q)) ||
-            (m.content && m.content.toLowerCase().includes(q))
-        )
-        setBackendMaterials(matched.length > 0 ? matched : allMaterials.slice(0, 3))
       })
-      .catch(() => {
-        // Backend unavailable, will show fallback content
-      })
-      .finally(() => setBackendLoading(false))
-  }, [user?.email, query])
+      .catch(() => setAiError(true))
+      .finally(() => setAiLoading(false))
+  }, [query, bestSubject])
+
+  // Derive related subjects from matched materials
+  const relatedSubjects = Array.from(
+    new Set(materials.map((m) => m.subject?.name).filter(Boolean))
+  ).slice(0, 6)
+
+  // Top materials for the repository section
+  const topMaterials = materials.slice(0, 5)
 
   return (
     <div className="glass rounded-2xl p-6 glow-sm">
@@ -89,95 +246,123 @@ function AISynthesisCard({ query }: { query: string }) {
               AI Knowledge Synthesis
             </h2>
             <p className="text-xs text-muted-foreground">
-              Generated from 12 Institutional Sources
+              {materials.length > 0
+                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""}`
+                : "Searching institutional sources..."}
             </p>
           </div>
         </div>
-
       </div>
 
+      {/* AI-generated explanation */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
-        <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Concept Definition
-          </h3>
-          <p>
-            The <strong className="text-foreground">{query || "Laplace Transform"}</strong> is an
-            integral transform that converts a function of a real variable (often
-            time) into a function of a complex variable (complex frequency). It
-            is widely used in engineering and physics for solving differential
-            equations, analyzing linear systems, and circuit analysis.
-          </p>
-        </div>
+        {(aiLoading || materialsLoading) && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Sparkles className="h-4 w-4 animate-pulse text-primary" />
+              <span className="text-xs">AI is analyzing your query across institutional knowledge...</span>
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-secondary/50" />
+              <div className="h-4 w-4/6 animate-pulse rounded bg-secondary/50" />
+            </div>
+          </div>
+        )}
 
-        <div>
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Context within Syllabus
-          </h3>
-          <p>
-            Covered in <strong className="text-foreground">Applied Mathematics III</strong>, Unit 4
-            &mdash; Integral Transforms. This topic builds upon concepts from
-            Fourier Analysis (Unit 3) and leads into Z-Transforms (Unit 5).
-          </p>
-        </div>
+        {!aiLoading && !materialsLoading && aiAnswer && (
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              AI Explanation
+            </h3>
+            <p className="whitespace-pre-line">{aiAnswer}</p>
+          </div>
+        )}
+
+        {!aiLoading && !materialsLoading && aiError && (
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              AI Explanation
+            </h3>
+            <p className="text-muted-foreground italic">
+              AI synthesis is currently unavailable. Showing matched materials from your institutional repository below.
+            </p>
+          </div>
+        )}
+
+        {!aiLoading && !materialsLoading && !aiAnswer && !aiError && (
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              AI Explanation
+            </h3>
+            <p className="text-muted-foreground italic">
+              No AI explanation available for this query. Try searching with a more specific topic.
+            </p>
+          </div>
+        )}
 
         {expanded && (
           <>
-            <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Related Units
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Fourier Series",
-                  "Z-Transform",
-                  "Transfer Functions",
-                  "Circuit Analysis",
-                  "Control Systems",
-                ].map((u) => (
-                  <Badge
-                    key={u}
-                    variant="outline"
-                    className="border-border bg-secondary/40 text-secondary-foreground"
-                  >
-                    {u}
-                  </Badge>
-                ))}
+            {/* Related Subjects */}
+            {relatedSubjects.length > 0 && (
+              <div>
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Related Subjects
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {relatedSubjects.map((s) => (
+                    <Badge
+                      key={s}
+                      variant="outline"
+                      className="border-border bg-secondary/40 text-secondary-foreground"
+                    >
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Academic Relevance
-              </h3>
-              <p>
-                Exam weightage: <strong className="text-foreground">15-20 marks</strong>. Frequently
-                appears in semester exams and GATE. High correlation with
-                questions on inverse transforms and application-based problems.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Citations
-              </h3>
-              <div className="flex flex-col gap-1.5">
-                {[
-                  "Prof. R. Sharma - Lecture 14: Introduction to Laplace Transform",
-                  "Engineering Mathematics, Kreyszig - Chapter 6",
-                  "Department of Mathematics - Study Material, pg. 142-158",
-                ].map((c, i) => (
-                  <a
-                    key={i}
-                    href="#"
-                    className="flex items-center gap-2 text-primary/80 transition-colors hover:text-primary"
-                  >
-                    <ExternalLink className="h-3 w-3 shrink-0" />
-                    <span className="text-xs">{c}</span>
-                  </a>
-                ))}
+            {/* Scholar link */}
+            {scholarLink && (
+              <div>
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Further Reading
+                </h3>
+                <a
+                  href={scholarLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-primary/80 hover:text-primary transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                  <span className="text-xs">Google Scholar Results</span>
+                </a>
               </div>
-            </div>
+            )}
+
+            {/* Citations from real materials */}
+            {topMaterials.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Sources
+                </h3>
+                <div className="flex flex-col gap-1.5">
+                  {topMaterials.slice(0, 4).map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setViewerMaterial(m)}
+                      className="flex items-center gap-2 text-primary/80 transition-colors hover:text-primary text-left"
+                    >
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                      <span className="text-xs line-clamp-1">
+                        {m.description || m.filePath} - {m.subject.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -197,21 +382,15 @@ function AISynthesisCard({ query }: { query: string }) {
         )}
       </button>
 
-      {/* Backend materials section */}
-      {backendLoading && (
-        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Checking institutional repository...
-        </div>
-      )}
-      {!backendLoading && backendMaterials.length > 0 && (
+      {/* Repository materials section */}
+      {!materialsLoading && topMaterials.length > 0 && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               From Your College Repository
             </h3>
             <button
-              onClick={() => downloadAllMaterials(backendMaterials.slice(0, 3))}
+              onClick={() => downloadAllMaterials(topMaterials.slice(0, 3))}
               className="flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
             >
               <Download className="h-3 w-3" />
@@ -219,7 +398,7 @@ function AISynthesisCard({ query }: { query: string }) {
             </button>
           </div>
           <div className="space-y-2">
-            {backendMaterials.slice(0, 3).map((mat) => (
+            {topMaterials.slice(0, 3).map((mat) => (
               <div
                 key={mat.id}
                 className="group flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-3 hover:border-primary/20 transition-all cursor-pointer"
@@ -227,7 +406,9 @@ function AISynthesisCard({ query }: { query: string }) {
               >
                 <FileText className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground">{mat.description || mat.filePath}</p>
+                  <p className="text-xs font-medium text-foreground">
+                    {mat.description || mat.filePath}
+                  </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     {mat.subject.name} &middot; {mat.type}
                   </p>
@@ -238,7 +419,10 @@ function AISynthesisCard({ query }: { query: string }) {
                   )}
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); downloadMaterial(mat) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    downloadMaterial(mat)
+                  }}
                   className="shrink-0 h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all"
                   title="Download"
                 >
@@ -251,9 +435,9 @@ function AISynthesisCard({ query }: { query: string }) {
       )}
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        {backendMaterials.length > 0
-          ? `Answer grounded in ${backendMaterials.length} institutional source${backendMaterials.length > 1 ? "s" : ""}`
-          : "Answer grounded in institutional academic content"}
+        {materials.length > 0
+          ? `Answer grounded in ${materials.length} institutional source${materials.length !== 1 ? "s" : ""}`
+          : "Searching for relevant institutional content..."}
       </p>
 
       {/* In-app material viewer */}
@@ -266,149 +450,36 @@ function AISynthesisCard({ query }: { query: string }) {
   )
 }
 
-/* ---------- Unified result card ---------- */
-interface ResultItem {
-  title: string
-  type: ContentFilter
-  typeLabel: string
-  subject: string
-  author: string
-  meta: string // size or duration
-  match: number
-  detail: string // page ref or timestamp
-}
-
-const ALL_RESULTS: ResultItem[] = [
-  {
-    title: "Laplace Transform: Theory and Applications in Engineering",
-    type: "research",
-    typeLabel: "Research Paper",
-    subject: "Applied Mathematics III",
-    author: "Prof. R. Sharma",
-    meta: "2.4 MB",
-    match: 97,
-    detail: "Cited 45 times",
-  },
-  {
-    title: "Introduction to Laplace Transform & Properties",
-    type: "video",
-    typeLabel: "Video Lecture",
-    subject: "Applied Mathematics III",
-    author: "Prof. R. Sharma",
-    meta: "45 min",
-    match: 96,
-    detail: "Relevant at 14:32",
-  },
-  {
-    title: "Integral Transforms - Lecture Slides (Week 7)",
-    type: "ppt",
-    typeLabel: "Presentation",
-    subject: "Applied Mathematics III",
-    author: "Prof. R. Sharma",
-    meta: "5.2 MB",
-    match: 94,
-    detail: "42 slides",
-  },
-  {
-    title: "Integral Transforms in Circuit Analysis",
-    type: "research",
-    typeLabel: "Research Paper",
-    subject: "Electrical Engineering",
-    author: "Prof. A. Mehta",
-    meta: "1.8 MB",
-    match: 92,
-    detail: "Cited 22 times",
-  },
-  {
-    title: "Laplace Transform in Circuit Analysis - RLC Circuits",
-    type: "video",
-    typeLabel: "Video Lecture",
-    subject: "Network Theory",
-    author: "Prof. A. Mehta",
-    meta: "38 min",
-    match: 91,
-    detail: "Relevant at 08:15",
-  },
-  {
-    title: "Study Material: Unit 4 - Integral Transforms",
-    type: "notes",
-    typeLabel: "Notes",
-    subject: "Department Notes",
-    author: "Dept. of Mathematics",
-    meta: "3.1 MB",
-    match: 89,
-    detail: "Pages 142-158",
-  },
-  {
-    title: "Control Systems & Transfer Functions - Slides",
-    type: "ppt",
-    typeLabel: "Presentation",
-    subject: "Control Systems",
-    author: "Prof. S. Gupta",
-    meta: "3.8 MB",
-    match: 88,
-    detail: "56 slides",
-  },
-  {
-    title: "Inverse Laplace Transform Techniques",
-    type: "video",
-    typeLabel: "Video Lecture",
-    subject: "Applied Mathematics III",
-    author: "Prof. R. Sharma",
-    meta: "52 min",
-    match: 87,
-    detail: "Relevant at 22:05",
-  },
-  {
-    title: "GATE Preparation: Laplace Transform Problem Set",
-    type: "notes",
-    typeLabel: "Notes",
-    subject: "Exam Prep",
-    author: "Academic Cell",
-    meta: "850 KB",
-    match: 84,
-    detail: "50 problems",
-  },
-  {
-    title: "Signal Processing: Time & Frequency Domain Methods",
-    type: "research",
-    typeLabel: "Research Paper",
-    subject: "Signal Processing",
-    author: "Prof. K. Rajan",
-    meta: "2.1 MB",
-    match: 79,
-    detail: "Cited 18 times",
-  },
-]
-
-const typeIconMap: Record<ContentFilter, typeof FileText> = {
-  all: Filter,
-  research: FileText,
-  ppt: Presentation,
-  video: Video,
-  notes: BookOpen,
-}
-
-const typeColorMap: Record<ContentFilter, { text: string; bg: string; border: string }> = {
-  all: { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
-  research: { text: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20" },
-  ppt: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" },
-  video: { text: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" },
-  notes: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-}
-
-function ResultCard({ item }: { item: ResultItem }) {
+/* ---------- Result Card ---------- */
+function ResultCard({
+  item,
+  onView,
+}: {
+  item: ResultItem
+  onView?: () => void
+}) {
   const colors = typeColorMap[item.type]
   const Icon = typeIconMap[item.type]
 
   return (
-    <div className="glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}>
+    <div
+      className={`glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm ${
+        item.backendMaterial ? "cursor-pointer" : ""
+      }`}
+      onClick={() => item.backendMaterial && onView?.()}
+    >
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
+      >
         <Icon className={`h-5 w-5 ${colors.text}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-medium text-foreground line-clamp-1">{item.title}</h4>
-        <p className="mt-0.5 text-xs text-muted-foreground">{item.author} &middot; {item.subject}</p>
+        <h4 className="text-sm font-medium text-foreground line-clamp-1">
+          {item.title}
+        </h4>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {item.author} &middot; {item.subject}
+        </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
@@ -417,50 +488,207 @@ function ResultCard({ item }: { item: ResultItem }) {
             {item.typeLabel}
           </Badge>
           <span className="text-[11px] text-muted-foreground">{item.meta}</span>
-          <span className="text-[11px] text-muted-foreground">{item.detail}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {item.detail}
+          </span>
+          {item.isStatic && (
+            <Badge variant="outline" className="border-border text-[10px] text-muted-foreground/60">
+              Suggested
+            </Badge>
+          )}
           <div className="ml-auto flex items-center gap-1">
             <BarChart3 className="h-3 w-3 text-primary" />
-            <span className="text-[11px] font-medium text-primary">{item.match}%</span>
+            <span className="text-[11px] font-medium text-primary">
+              {item.match}%
+            </span>
           </div>
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <Download className="h-3.5 w-3.5" />
-        <span className="sr-only">Download</span>
-      </Button>
+      {item.backendMaterial ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (item.backendMaterial) downloadMaterial(item.backendMaterial)
+          }}
+        >
+          <Download className="h-3.5 w-3.5" />
+          <span className="sr-only">Download</span>
+        </Button>
+      ) : (
+        <div className="shrink-0 w-8" />
+      )}
     </div>
   )
 }
 
 /* ---------- Main Search Results ---------- */
-export function SearchResults({ query }: { query: string }) {
-  const [filter, setFilter] = useState<ContentFilter>("all")
+export function SearchResults({
+  query,
+  initialFilter,
+}: {
+  query: string
+  initialFilter?: ContentFilter
+}) {
+  const { user } = useAuth()
+  const [filter, setFilter] = useState<ContentFilter>(initialFilter || "all")
+  const [results, setResults] = useState<ResultItem[]>([])
+  const [allMaterials, setAllMaterials] = useState<BackendMaterial[]>([])
+  const [subjects, setSubjects] = useState<BackendSubject[]>([])
+  const [bestSubject, setBestSubject] = useState<BackendSubject | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  const filtered = filter === "all" ? ALL_RESULTS : ALL_RESULTS.filter((r) => r.type === filter)
+  // Fetch materials from all subjects and build result list
+  const fetchAndScoreResults = useCallback(async () => {
+    if (!user?.email) {
+      setResults(STATIC_RESULTS)
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const fetchedSubjects = await getSubjects(user.email)
+      setSubjects(fetchedSubjects)
+
+      // Fetch materials from all subjects in parallel
+      const materialsPerSubject = await Promise.allSettled(
+        fetchedSubjects.map((s) => getMaterials(s.id))
+      )
+
+      const allMats: BackendMaterial[] = []
+      const subjectScores: Map<number, number> = new Map()
+
+      materialsPerSubject.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const mats = result.value
+          allMats.push(...mats)
+
+          // Track total relevance score per subject
+          const subjectId = fetchedSubjects[index].id
+          let totalScore = 0
+          for (const mat of mats) {
+            totalScore += scoreRelevance(mat, query)
+          }
+          subjectScores.set(subjectId, totalScore)
+        }
+      })
+
+      setAllMaterials(allMats)
+
+      // Find best subject (highest aggregate relevance)
+      let bestId: number | null = null
+      let bestScore = 0
+      subjectScores.forEach((score, id) => {
+        if (score > bestScore) {
+          bestScore = score
+          bestId = id
+        }
+      })
+
+      if (bestId !== null) {
+        const best = fetchedSubjects.find((s) => s.id === bestId) || null
+        setBestSubject(best)
+      }
+
+      // Score and map backend materials to result items
+      const backendResults: ResultItem[] = allMats
+        .map((mat) => ({
+          title: mat.description || mat.filePath || "Untitled Material",
+          type: mapTypeToFilter(mat.type),
+          typeLabel: mapTypeLabel(mat.type),
+          subject: mat.subject?.name || "Unknown Subject",
+          author: mat.subject?.department || "Institution",
+          meta: mat.type === "VIDEO" ? "Video" : "Document",
+          match: scoreRelevance(mat, query),
+          detail: mat.subject?.name || "",
+          backendMaterial: mat,
+        }))
+        .filter((r) => r.match > 0) // only keep items with some relevance
+        .sort((a, b) => b.match - a.match)
+
+      // Merge with static fallbacks if fewer than 5 backend results
+      let combined = [...backendResults]
+      if (backendResults.length < 5) {
+        const staticToAdd = STATIC_RESULTS.slice(
+          0,
+          5 - backendResults.length
+        )
+        combined = [...combined, ...staticToAdd]
+      }
+
+      // Sort by match score descending
+      combined.sort((a, b) => b.match - a.match)
+      setResults(combined)
+    } catch {
+      // Backend unavailable -- show static fallbacks
+      setResults(STATIC_RESULTS)
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.email, query])
+
+  useEffect(() => {
+    fetchAndScoreResults()
+  }, [fetchAndScoreResults])
+
+  // Update filter when initialFilter prop changes
+  useEffect(() => {
+    if (initialFilter) {
+      setFilter(initialFilter)
+    }
+  }, [initialFilter])
+
+  const filtered =
+    filter === "all" ? results : results.filter((r) => r.type === filter)
+
+  // Compute counts from real data
+  const countAll = results.length
+  const countByType = (type: ContentFilter) =>
+    results.filter((r) => r.type === type).length
 
   return (
     <section className="mx-auto max-w-6xl px-4 pb-16">
       <p className="mb-6 text-sm text-muted-foreground">
-        Showing results for{" "}
-        <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span>
-        <span className="ml-2 text-muted-foreground">
-          &middot; {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-        </span>
+        {loading ? (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Searching institutional knowledge base...
+          </span>
+        ) : (
+          <>
+            Showing results for{" "}
+            <span className="font-medium text-foreground">
+              &ldquo;{query}&rdquo;
+            </span>
+            <span className="ml-2 text-muted-foreground">
+              &middot; {filtered.length} result
+              {filtered.length !== 1 ? "s" : ""}
+            </span>
+          </>
+        )}
       </p>
 
       {/* AI Synthesis */}
-      <AISynthesisCard query={query} />
+      <AISynthesisCard
+        query={query}
+        materials={allMaterials}
+        subjects={subjects}
+        bestSubject={bestSubject}
+        materialsLoading={loading}
+      />
 
       {/* Filter Bar */}
       <div className="mt-8 mb-5 flex items-center gap-2 overflow-x-auto pb-1">
         {FILTERS.map((f) => {
           const Icon = f.icon
           const isActive = filter === f.id
-          const count = f.id === "all" ? ALL_RESULTS.length : ALL_RESULTS.filter((r) => r.type === f.id).length
+          const count =
+            f.id === "all" ? countAll : countByType(f.id)
           return (
             <button
               key={f.id}
@@ -473,7 +701,13 @@ export function SearchResults({ query }: { query: string }) {
             >
               <Icon className="h-3.5 w-3.5" />
               {f.label}
-              <span className={`ml-0.5 text-[10px] ${isActive ? "text-primary/70" : "text-muted-foreground/60"}`}>
+              <span
+                className={`ml-0.5 text-[10px] ${
+                  isActive
+                    ? "text-primary/70"
+                    : "text-muted-foreground/60"
+                }`}
+              >
                 ({count})
               </span>
             </button>
@@ -482,18 +716,51 @@ export function SearchResults({ query }: { query: string }) {
       </div>
 
       {/* Results List */}
-      <div className="flex flex-col gap-3">
-        {filtered.map((item, i) => (
-          <ResultCard key={i} item={item} />
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Filter className="h-8 w-8 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">No results found for this filter</p>
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="glass rounded-xl p-4 flex items-start gap-4"
+            >
+              <div className="h-10 w-10 rounded-lg animate-pulse bg-secondary/50" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-secondary/50" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-secondary/50" />
+                <div className="h-3 w-1/3 animate-pulse rounded bg-secondary/50" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtered.map((item, i) => (
+            <ResultCard
+              key={item.backendMaterial?.id ?? `static-${i}`}
+              item={item}
+              onView={() => {
+                if (item.backendMaterial) setViewerMaterial(item.backendMaterial)
+              }}
+            />
+          ))}
         </div>
       )}
+
+      {!loading && filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Filter className="h-8 w-8 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">
+            No results found for this filter
+          </p>
+        </div>
+      )}
+
+      {/* Material viewer dialog */}
+      <MaterialViewer
+        material={viewerMaterial}
+        open={!!viewerMaterial}
+        onClose={() => setViewerMaterial(null)}
+      />
     </section>
   )
 }
