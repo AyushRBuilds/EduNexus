@@ -10,6 +10,7 @@ export {
   uploadMaterial,
 } from "./academic.service"
 export { aiExplain } from "./ai.service"
+export { downloadMaterial, downloadAllMaterials } from "./download"
 export type {
   BackendUser,
   BackendSubject,

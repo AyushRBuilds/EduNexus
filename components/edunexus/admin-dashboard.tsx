@@ -16,6 +16,7 @@ import {
   Clock,
   Loader2,
   Upload,
+  Download,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,6 +30,8 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials, uploadMaterial, addMaterial } from "@/lib/api/academic.service"
+import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
+import { MaterialViewer } from "./material-viewer"
 import type { BackendSubject, BackendMaterial } from "@/lib/api/types"
 
 /* ---------- Stat Card ---------- */
@@ -348,6 +351,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [backendConnected, setBackendConnected] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
   // Load subjects and materials from backend
   useEffect(() => {
@@ -544,13 +548,28 @@ export function AdminDashboard() {
                   <FileText className="h-4 w-4 text-primary" />
                   Indexed Materials
                 </h3>
-                <Badge variant="outline" className="text-[10px] border-primary/20 bg-primary/10 text-primary">
-                  {allMaterials.length} total
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs border-primary/20 text-primary hover:bg-primary/10"
+                    onClick={() => downloadAllMaterials(allMaterials)}
+                  >
+                    <Download className="h-3 w-3" />
+                    Download All ({allMaterials.length})
+                  </Button>
+                  <Badge variant="outline" className="text-[10px] border-primary/20 bg-primary/10 text-primary">
+                    {allMaterials.length} total
+                  </Badge>
+                </div>
               </div>
               <div className="space-y-2">
                 {allMaterials.map((mat) => (
-                  <div key={mat.id} className="flex items-center gap-4 py-2.5 border-b border-border/30 last:border-0">
+                  <div
+                    key={mat.id}
+                    className="group flex items-center gap-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-secondary/10 rounded-lg transition-colors px-1 cursor-pointer"
+                    onClick={() => setViewerMaterial(mat)}
+                  >
                     <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                       <FileText className="h-4 w-4 text-primary" />
                     </div>
@@ -562,9 +581,16 @@ export function AdminDashboard() {
                         {mat.subject.name} &middot; {mat.type}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20">
+                    <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20 shrink-0">
                       {mat.type}
                     </Badge>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); downloadMaterial(mat) }}
+                      className="shrink-0 h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Download"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -613,6 +639,13 @@ export function AdminDashboard() {
           </div>
         </>
       )}
+
+      {/* In-app material viewer */}
+      <MaterialViewer
+        material={viewerMaterial}
+        open={!!viewerMaterial}
+        onClose={() => setViewerMaterial(null)}
+      />
     </section>
   )
 }

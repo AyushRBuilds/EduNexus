@@ -111,23 +111,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
 
   const login = useCallback(async (email: string, _password: string) => {
+    // Retry helper for cold-starting Render instances
+    const tryLogin = async (retries: number): Promise<FrontendUser> => {
+      try {
+        const backendUser = await loginUser(email)
+        return mapBackendUserToFrontend(backendUser)
+      } catch (err) {
+        // 502/503 = proxy reached backend but it's still waking up
+        const isServerWaking =
+          err instanceof ApiError && (err.status === 502 || err.status === 503)
+        if (isServerWaking && retries > 0) {
+          await new Promise((r) => setTimeout(r, 3000))
+          return tryLogin(retries - 1)
+        }
+        throw err
+      }
+    }
+
     try {
-      // Try the real backend first
-      const backendUser = await loginUser(email)
-      const frontendUser = mapBackendUserToFrontend(backendUser)
+      // Try the real backend first (with up to 3 retries for cold-start)
+      const frontendUser = await tryLogin(3)
       setUser(frontendUser)
       return { success: true }
     } catch (err) {
-      // If backend is unreachable (network error), fall back to mock data
-      if (err instanceof ApiError) {
-        // Backend responded with an error (e.g. 401 user not found)
+      // If backend returned a real error (e.g. 401/404 user not found)
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
         return {
           success: false,
           error: err.message || "Login failed. Check your credentials.",
         }
       }
 
-      // Network error - backend not running, try mock fallback
+      // Network error or 5xx -- backend not reachable, fall back to mock
       console.warn(
         "[EduNexus] Backend unreachable, falling back to mock auth"
       )

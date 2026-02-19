@@ -45,6 +45,8 @@ import type { UserRole } from "./auth-context"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
 import { aiExplain } from "@/lib/api/ai.service"
+import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
+import { MaterialViewer } from "./material-viewer"
 import type {
   BackendSubject,
   BackendMaterial,
@@ -444,6 +446,23 @@ function SubjectDetail({
       {/* Materials list (from backend) */}
       {activeTab === "materials" && (
         <div className="space-y-2">
+          {/* Download All button */}
+          {!materialsLoading && !materialsError && materials.length > 0 && (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground">
+                {materials.length} material{materials.length !== 1 ? "s" : ""} available
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-primary/20 text-primary hover:bg-primary/10"
+                onClick={() => downloadAllMaterials(materials)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download All
+              </Button>
+            </div>
+          )}
           {materialsLoading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -464,7 +483,8 @@ function SubjectDetail({
           {materials.map((mat) => (
             <div
               key={mat.id}
-              className="glass rounded-xl p-4 flex items-start gap-4 hover:border-primary/20 transition-all group"
+              className="glass rounded-xl p-4 flex items-start gap-4 hover:border-primary/20 transition-all group cursor-pointer"
+              onClick={() => setViewerMaterial(mat)}
             >
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <FileText className="h-5 w-5 text-primary" />
@@ -486,6 +506,25 @@ function SubjectDetail({
                     {mat.content}
                   </p>
                 )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-primary"
+                  onClick={(e) => { e.stopPropagation(); setViewerMaterial(mat) }}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-primary"
+                  onClick={(e) => { e.stopPropagation(); downloadMaterial(mat) }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </div>
           ))}
@@ -857,7 +896,8 @@ export function SubjectsView({ userRole }: { userRole: UserRole }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [backendError, setBackendError] = useState<string | null>(null)
-
+  const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
+  
   const isAdmin = userRole === "admin"
 
   // Fetch subjects from backend
@@ -1074,6 +1114,13 @@ export function SubjectsView({ userRole }: { userRole: UserRole }) {
         onOpenChange={setDeleteDialogOpen}
         subject={deleteTarget}
         onConfirm={handleDelete}
+      />
+
+      {/* In-app material viewer */}
+      <MaterialViewer
+        material={viewerMaterial}
+        open={!!viewerMaterial}
+        onClose={() => setViewerMaterial(null)}
       />
     </section>
   )
