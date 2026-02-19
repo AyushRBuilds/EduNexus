@@ -31,7 +31,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "./auth-context"
-import { useBackendHealth, type BackendStatus } from "@/hooks/use-backend-health"
 
 /**
  * All API calls go through /api/proxy which forwards server-side
@@ -49,80 +48,13 @@ interface SubjectData {
 /* ============================================================
    Tab 1: Add Standard Material (LINK or VIDEO)
    ============================================================ */
-
-interface SubjectTabProps {
-  subjects: SubjectData[]
-  subjectsLoading: boolean
-  backendStatus: BackendStatus
-  retryBackend: () => void
-}
-
-function SubjectSelector({
-  subjects,
-  subjectsLoading,
-  backendStatus,
-  retryBackend,
-  subjectId,
-  setSubjectId,
-}: SubjectTabProps & { subjectId: string; setSubjectId: (v: string) => void }) {
-  if (subjectsLoading || backendStatus === "waking" || backendStatus === "unknown") {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        {backendStatus === "waking" || backendStatus === "unknown"
-          ? "Waking up backend server (~30-60s)..."
-          : "Loading subjects..."}
-      </div>
-    )
-  }
-
-  if (backendStatus === "down") {
-    return (
-      <div className="space-y-1.5 py-2">
-        <p className="text-xs text-destructive">
-          Backend server is not responding.
-        </p>
-        <button
-          type="button"
-          onClick={retryBackend}
-          className="text-xs text-primary underline hover:no-underline"
-        >
-          Try again
-        </button>
-      </div>
-    )
-  }
-
-  if (subjects.length === 0) {
-    return (
-      <p className="text-xs text-amber-400 py-2">
-        No subjects found for this account.
-      </p>
-    )
-  }
-
-  return (
-    <Select value={subjectId} onValueChange={setSubjectId}>
-      <SelectTrigger className="bg-secondary/30 border-border/40">
-        <SelectValue placeholder="Select subject" />
-      </SelectTrigger>
-      <SelectContent>
-        {subjects.map((s) => (
-          <SelectItem key={s.id} value={String(s.id)}>
-            {s.name} (Sem {s.semester})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
 function AddMaterialTab({
   subjects,
   subjectsLoading,
-  backendStatus,
-  retryBackend,
-}: SubjectTabProps) {
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [type, setType] = useState<"LINK" | "VIDEO">("LINK")
   const [url, setUrl] = useState("")
@@ -178,14 +110,29 @@ function AddMaterialTab({
           <label className="text-xs font-medium text-muted-foreground">
             Subject
           </label>
-          <SubjectSelector
-            subjects={subjects}
-            subjectsLoading={subjectsLoading}
-            backendStatus={backendStatus}
-            retryBackend={retryBackend}
-            subjectId={subjectId}
-            setSubjectId={setSubjectId}
-          />
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={subjectId} onValueChange={setSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select subject" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} (Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found. Backend may be waking up -- please wait a moment and refresh.
+            </p>
+          )}
         </div>
 
         {/* Type */}
@@ -287,9 +234,10 @@ function AddMaterialTab({
 function UploadPdfTab({
   subjects,
   subjectsLoading,
-  backendStatus,
-  retryBackend,
-}: SubjectTabProps) {
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [description, setDescription] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -355,14 +303,29 @@ function UploadPdfTab({
           <label className="text-xs font-medium text-muted-foreground">
             Subject
           </label>
-          <SubjectSelector
-            subjects={subjects}
-            subjectsLoading={subjectsLoading}
-            backendStatus={backendStatus}
-            retryBackend={retryBackend}
-            subjectId={subjectId}
-            setSubjectId={setSubjectId}
-          />
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={subjectId} onValueChange={setSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select subject" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} (Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
+          )}
         </div>
 
         {/* Description */}
@@ -498,9 +461,10 @@ function UploadPdfTab({
 function AskAiTab({
   subjects,
   subjectsLoading,
-  backendStatus,
-  retryBackend,
-}: SubjectTabProps) {
+}: {
+  subjects: SubjectData[]
+  subjectsLoading: boolean
+}) {
   const [subjectId, setSubjectId] = useState("")
   const [question, setQuestion] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -547,14 +511,29 @@ function AskAiTab({
           <label className="text-xs font-medium text-muted-foreground">
             Subject Context
           </label>
-          <SubjectSelector
-            subjects={subjects}
-            subjectsLoading={subjectsLoading}
-            backendStatus={backendStatus}
-            retryBackend={retryBackend}
-            subjectId={subjectId}
-            setSubjectId={setSubjectId}
-          />
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={subjectId} onValueChange={setSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select subject for context" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} (Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">
+              No subjects found.
+            </p>
+          )}
         </div>
 
         {/* Question */}
@@ -728,46 +707,50 @@ type TabId = "material" | "upload" | "ai"
 
 export function FacultyMode() {
   const { user } = useAuth()
-  const { status: backendStatus, retry: retryBackend } = useBackendHealth()
   const [activeTab, setActiveTab] = useState<TabId>("material")
   const [subjects, setSubjects] = useState<SubjectData[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
 
-  // Fetch subjects once backend is alive
+  // Load subjects from backend with retry for Render cold-start
   useEffect(() => {
     if (!user?.email) {
       setSubjectsLoading(false)
       return
     }
 
-    // Wait until backend health check confirms it's up
-    if (backendStatus !== "ok") {
-      setSubjectsLoading(true)
-      return
-    }
-
     let cancelled = false
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 8000
 
-    async function fetchSubjects() {
+    async function fetchSubjects(attempt: number) {
       if (cancelled) return
-      setSubjectsLoading(true)
       try {
         const res = await fetch(
           `${API}/academic/subjects?email=${encodeURIComponent(user!.email)}`
         )
         if (!res.ok) throw new Error(`Backend error: ${res.status}`)
         const data = await res.json()
-        if (!cancelled) setSubjects(data)
+        if (!cancelled) {
+          setSubjects(data)
+          setSubjectsLoading(false)
+        }
       } catch {
-        // Already handled by health check / retry
-      } finally {
-        if (!cancelled) setSubjectsLoading(false)
+        if (cancelled) return
+        if (attempt < MAX_RETRIES) {
+          // Backend may be cold-starting, retry after delay
+          await new Promise((r) => setTimeout(r, RETRY_DELAY))
+          fetchSubjects(attempt + 1)
+        } else {
+          setSubjectsLoading(false)
+        }
       }
     }
 
-    fetchSubjects()
+    setSubjectsLoading(true)
+    fetchSubjects(0)
+
     return () => { cancelled = true }
-  }, [user?.email, backendStatus])
+  }, [user?.email])
 
   const tabs: { id: TabId; label: string; icon: typeof FileText }[] = [
     { id: "material", label: "Add Material", icon: LinkIcon },
@@ -818,24 +801,18 @@ export function FacultyMode() {
               <AddMaterialTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                backendStatus={backendStatus}
-                retryBackend={retryBackend}
               />
             )}
             {activeTab === "upload" && (
               <UploadPdfTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                backendStatus={backendStatus}
-                retryBackend={retryBackend}
               />
             )}
             {activeTab === "ai" && (
               <AskAiTab
                 subjects={subjects}
                 subjectsLoading={subjectsLoading}
-                backendStatus={backendStatus}
-                retryBackend={retryBackend}
               />
             )}
           </div>
