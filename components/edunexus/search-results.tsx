@@ -552,8 +552,27 @@ export function SearchResults({
     setLoading(true)
 
     try {
-      const fetchedSubjects = await getSubjects(user.email)
+      // Try fetching subjects with the user's email; if backend
+      // doesn't know this email, fall back to a well-known demo email
+      // so that the search still returns real uploaded materials.
+      let fetchedSubjects: BackendSubject[] = []
+      try {
+        fetchedSubjects = await getSubjects(user.email)
+      } catch {
+        // Backend may not have this user -- try a known demo email
+        try {
+          fetchedSubjects = await getSubjects("redekarayush07@gmail.com")
+        } catch {
+          // Give up on backend subjects
+        }
+      }
       setSubjects(fetchedSubjects)
+
+      if (fetchedSubjects.length === 0) {
+        setResults(STATIC_RESULTS)
+        setLoading(false)
+        return
+      }
 
       // Fetch materials from all subjects in parallel
       const materialsPerSubject = await Promise.allSettled(

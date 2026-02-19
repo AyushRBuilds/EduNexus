@@ -44,6 +44,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// ---------- Mock / demo accounts that bypass Supabase ----------
+const DEMO_ACCOUNTS: Record<string, User> = {
+  "faculty@edunexus.com": {
+    id: "demo-faculty-001",
+    name: "Dr. Sharma",
+    email: "redekarayush07@gmail.com", // maps to the backend-registered user
+    role: "faculty",
+    department: "Computer Science",
+    avatar: "DS",
+    semester: null,
+  },
+  "admin@edunexus.com": {
+    id: "demo-admin-001",
+    name: "Admin User",
+    email: "redekarayush07@gmail.com", // maps to the backend-registered user
+    role: "admin",
+    department: "Administration",
+    avatar: "AU",
+    semester: null,
+  },
+}
+const DEMO_PASSWORD = "demo123"
+
 function buildUserFromSupabase(
   supabaseUser: { id: string; email?: string; user_metadata?: Record<string, unknown> },
   profile?: { name: string; role: string; department: string; semester: number | null } | null
@@ -151,6 +174,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      // Check demo accounts first (works without Supabase)
+      const demoUser = DEMO_ACCOUNTS[email.toLowerCase()]
+      if (demoUser && password === DEMO_PASSWORD) {
+        setUser(demoUser)
+        return { success: true }
+      }
+      if (demoUser && password !== DEMO_PASSWORD) {
+        return { success: false, error: "Invalid password for demo account. Use: demo123" }
+      }
+
       if (!supabase) {
         return { success: false, error: "Supabase is not configured. Check your environment variables." }
       }

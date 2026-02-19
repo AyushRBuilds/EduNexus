@@ -349,6 +349,61 @@ export function LoginPage() {
             </button>
           </form>
 
+          {/* Demo login shortcuts (sign-in mode only) */}
+          {!isSignUp && (
+            <div className="mt-5">
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-3 text-muted-foreground">
+                    or use a demo account
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    setError("")
+                    setLoading(true)
+                    const result = await login("faculty@edunexus.com", "demo123")
+                    if (!result.success) setError(result.error || "Login failed")
+                    setLoading(false)
+                  }}
+                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                >
+                  <span className="w-6 h-6 rounded-md bg-accent/15 text-accent flex items-center justify-center text-[10px] font-bold">
+                    F
+                  </span>
+                  Faculty Demo
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    setError("")
+                    setLoading(true)
+                    const result = await login("admin@edunexus.com", "demo123")
+                    if (!result.success) setError(result.error || "Login failed")
+                    setLoading(false)
+                  }}
+                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                >
+                  <span className="w-6 h-6 rounded-md bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold">
+                    A
+                  </span>
+                  Admin Demo
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                {"Demo password: demo123"}
+              </p>
+            </div>
+          )}
+
           {/* Toggle sign-in / sign-up */}
           <div className="mt-5 text-center">
             <p className="text-sm text-muted-foreground">
