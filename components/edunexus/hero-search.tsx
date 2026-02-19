@@ -4,8 +4,17 @@ import { useState } from "react"
 import { Search, ArrowRight } from "lucide-react"
 import { EduNexusLogo } from "./edunexus-logo"
 import { Badge } from "@/components/ui/badge"
+import type { ContentFilter } from "./search-results"
 
 const filterChips = ["All", "Research Papers", "PPT", "Video Lectures", "Notes"] as const
+
+const chipToFilter: Record<(typeof filterChips)[number], ContentFilter> = {
+  All: "all",
+  "Research Papers": "research",
+  PPT: "ppt",
+  "Video Lectures": "video",
+  Notes: "notes",
+}
 
 const placeholders = [
   "Explain Laplace Transform applications in circuit analysis",
@@ -18,7 +27,7 @@ const placeholders = [
 export function HeroSearch({
   onSearch,
 }: {
-  onSearch: (query: string) => void
+  onSearch: (query: string, filter?: ContentFilter) => void
 }) {
   const [query, setQuery] = useState("")
   const [activeFilter, setActiveFilter] = useState<string>("All")
@@ -28,7 +37,7 @@ export function HeroSearch({
 
   const handleSubmit = () => {
     if (query.trim()) {
-      onSearch(query.trim())
+      onSearch(query.trim(), chipToFilter[activeFilter as (typeof filterChips)[number]] || "all")
     }
   }
 
