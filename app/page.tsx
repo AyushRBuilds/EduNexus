@@ -6,7 +6,7 @@ import { LoginPage } from "@/components/edunexus/login-page"
 import { TopNav } from "@/components/edunexus/top-nav"
 import { AppSidebar, MobileBottomNav, type ViewId } from "@/components/edunexus/app-sidebar"
 import { HeroSearch } from "@/components/edunexus/hero-search"
-import { SearchResults } from "@/components/edunexus/search-results"
+import { SearchResults, type ContentFilter } from "@/components/edunexus/search-results"
 import { TrendingSection } from "@/components/edunexus/trending-section"
 import { FacultyMode } from "@/components/edunexus/faculty-mode"
 import { ResearchCollab } from "@/components/edunexus/research-collab"
@@ -20,9 +20,10 @@ import { EduNexusLogo } from "@/components/edunexus/edunexus-logo"
 import { InitAnimation } from "@/components/edunexus/init-animation"
 
 export default function EduNexusPage() {
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth()
   const [activeView, setActiveView] = useState<ViewId>("search")
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchFilter, setSearchFilter] = useState<ContentFilter>("all")
   const [hasSearched, setHasSearched] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [initDone, setInitDone] = useState(false)
@@ -32,6 +33,18 @@ export default function EduNexusPage() {
     return <InitAnimation onComplete={() => setInitDone(true)} />
   }
 
+  // Show a loading spinner while Supabase session is being restored
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <EduNexusLogo size={48} />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      </div>
+    )
+  }
+
   // Show login if not authenticated
   if (!isAuthenticated || !user) {
     return <LoginPage />
@@ -39,8 +52,9 @@ export default function EduNexusPage() {
 
   const userRole = user.role
 
-  const handleSearch = (query: string) => {
+  const handleSearch = (query: string, filter?: ContentFilter) => {
     setSearchQuery(query)
+    if (filter) setSearchFilter(filter)
     setHasSearched(true)
     setActiveView("search")
   }
@@ -84,7 +98,7 @@ export default function EduNexusPage() {
             {activeView === "search" && (
               <>
                 {!hasSearched && <HeroSearch onSearch={handleSearch} />}
-                {hasSearched && <SearchResults query={searchQuery} />}
+                {hasSearched && <SearchResults query={searchQuery} initialFilter={searchFilter} />}
                 {!hasSearched && <TrendingSection onSearch={handleSearch} />}
               </>
             )}
