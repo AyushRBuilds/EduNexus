@@ -541,7 +541,10 @@ export function TopNav({
               <AlertDialogFooter>
                 <AlertDialogCancel className="border-border/50">Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={logout}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    logout()
+                  }}
                   className="bg-destructive !text-white hover:bg-destructive/90 font-semibold"
                 >
                   Sign Out

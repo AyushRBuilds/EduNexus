@@ -15,12 +15,14 @@ import {
   Filter,
   Loader2,
   Sparkles,
+  Bot,
+  Zap,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
-import { aiExplain } from "@/lib/api/ai.service"
+import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
@@ -198,33 +200,70 @@ function AISynthesisCard({
   materialsLoading: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState(false)
-  const [scholarLink, setScholarLink] = useState<string | null>(null)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // Call /ai/explain when we have a best subject
+  // n8n is the PRIMARY AI source for search & explain
+  const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
+  const [n8nLoading, setN8nLoading] = useState(false)
+  const [n8nError, setN8nError] = useState(false)
+
+  // Fallback: old backend AI explain (used only when n8n fails)
+  const [fallbackAnswer, setFallbackAnswer] = useState<string | null>(null)
+  const [fallbackLoading, setFallbackLoading] = useState(false)
+  const [fallbackError, setFallbackError] = useState(false)
+  const [scholarLink, setScholarLink] = useState<string | null>(null)
+
+  // 1. Call n8n workflow (primary) whenever query changes
   useEffect(() => {
+    if (!query) return
+
+    setN8nLoading(true)
+    setN8nError(false)
+    setN8nAnswer(null)
+
+    n8nChat(query)
+      .then((res) => {
+        if (res.error || !res.output) {
+          setN8nError(true)
+        } else {
+          setN8nAnswer(res.output)
+        }
+      })
+      .catch(() => {
+        setN8nError(true)
+      })
+      .finally(() => setN8nLoading(false))
+  }, [query])
+
+  // 2. Call backend /ai/explain as fallback when n8n fails
+  useEffect(() => {
+    // Only call fallback if n8n has finished and failed
+    if (n8nLoading || !n8nError) return
     if (!bestSubject || !query) return
 
-    setAiLoading(true)
-    setAiError(false)
-    setAiAnswer(null)
+    setFallbackLoading(true)
+    setFallbackError(false)
+    setFallbackAnswer(null)
     setScholarLink(null)
 
     aiExplain(query, bestSubject.id)
       .then((res) => {
         if (res.error) {
-          setAiError(true)
+          setFallbackError(true)
         } else {
-          setAiAnswer(res.answer || res.message || null)
+          setFallbackAnswer(res.answer || res.message || null)
           setScholarLink(res.scholarLink || null)
         }
       })
-      .catch(() => setAiError(true))
-      .finally(() => setAiLoading(false))
-  }, [query, bestSubject])
+      .catch(() => setFallbackError(true))
+      .finally(() => setFallbackLoading(false))
+  }, [query, bestSubject, n8nLoading, n8nError])
+
+  // Derived: the best available answer
+  const aiAnswer = n8nAnswer || fallbackAnswer
+  const aiLoading = n8nLoading || (n8nError && fallbackLoading)
+  const aiError = n8nError && fallbackError
+  const answerSource = n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
 
   // Derive related subjects from matched materials
   const relatedSubjects = Array.from(
@@ -247,20 +286,24 @@ function AISynthesisCard({
             </h2>
             <p className="text-xs text-muted-foreground">
               {materials.length > 0
-                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""}`
-                : "Searching institutional sources..."}
+                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} via n8n workflow`
+                : "Querying n8n workflow..."}
             </p>
           </div>
         </div>
       </div>
 
-      {/* AI-generated explanation */}
+      {/* AI-generated explanation (n8n primary, backend fallback) */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
         {(aiLoading || materialsLoading) && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4 animate-pulse text-primary" />
-              <span className="text-xs">AI is analyzing your query across institutional knowledge...</span>
+              <span className="text-xs">
+                {n8nLoading
+                  ? "Querying n8n workflow for AI explanation..."
+                  : "AI is analyzing your query across institutional knowledge..."}
+              </span>
             </div>
             <div className="space-y-2">
               <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
@@ -272,9 +315,17 @@ function AISynthesisCard({
 
         {!aiLoading && !materialsLoading && aiAnswer && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Explanation
-            </h3>
+            <div className="mb-1.5 flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                AI Explanation
+              </h3>
+              {answerSource && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  <Zap className="h-2.5 w-2.5" />
+                  {answerSource}
+                </span>
+              )}
+            </div>
             <p className="whitespace-pre-line">{aiAnswer}</p>
           </div>
         )}
@@ -435,9 +486,9 @@ function AISynthesisCard({
       )}
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        {materials.length > 0
-          ? `Answer grounded in ${materials.length} institutional source${materials.length !== 1 ? "s" : ""}`
-          : "Searching for relevant institutional content..."}
+        {answerSource
+          ? `Powered by ${answerSource} — ${materials.length} source${materials.length !== 1 ? "s" : ""} analyzed`
+          : "Querying n8n workflow..."}
       </p>
 
       {/* In-app material viewer */}
@@ -552,19 +603,22 @@ export function SearchResults({
     setLoading(true)
 
     try {
-      // Try fetching subjects with the user's email; if backend
-      // doesn't know this email, fall back to a well-known demo email
-      // so that the search still returns real uploaded materials.
+      // Fetch subjects with retry for Render cold-start
       let fetchedSubjects: BackendSubject[] = []
-      try {
-        fetchedSubjects = await getSubjects(user.email)
-      } catch {
-        // Backend may not have this user -- try a known demo email
-        try {
-          fetchedSubjects = await getSubjects("redekarayush07@gmail.com")
-        } catch {
-          // Give up on backend subjects
+      const emails = [user.email, "redekarayush07@gmail.com"]
+
+      for (const email of emails) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            fetchedSubjects = await getSubjects(email)
+            break
+          } catch {
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 5000))
+            }
+          }
         }
+        if (fetchedSubjects.length > 0) break
       }
       setSubjects(fetchedSubjects)
 

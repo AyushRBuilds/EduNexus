@@ -300,8 +300,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    if (supabase) {
-      await supabase.auth.signOut()
+    try {
+      if (supabase) {
+        await supabase.auth.signOut()
+      }
+    } catch {
+      // Ignore sign-out errors -- we clear user state regardless
     }
     setUser(null)
   }, [supabase])

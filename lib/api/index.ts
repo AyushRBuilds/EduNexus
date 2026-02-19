@@ -9,7 +9,8 @@ export {
   addMaterial,
   uploadMaterial,
 } from "./academic.service"
-export { aiExplain } from "./ai.service"
+export { aiExplain, n8nChat } from "./ai.service"
+export type { N8nChatResponse } from "./ai.service"
 export { downloadMaterial, downloadAllMaterials } from "./download"
 export type {
   BackendUser,

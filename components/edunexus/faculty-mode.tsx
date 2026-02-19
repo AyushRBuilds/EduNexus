@@ -130,7 +130,7 @@ function AddMaterialTab({
             </Select>
           ) : (
             <p className="text-xs text-amber-400 py-2">
-              No subjects found. Backend may be offline.
+              No subjects found. Backend may be waking up -- please wait a moment and refresh.
             </p>
           )}
         </div>
@@ -711,25 +711,45 @@ export function FacultyMode() {
   const [subjects, setSubjects] = useState<SubjectData[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
 
-  // Load subjects from backend -- direct fetch, no service import
+  // Load subjects from backend with retry for Render cold-start
   useEffect(() => {
     if (!user?.email) {
       setSubjectsLoading(false)
       return
     }
-    setSubjectsLoading(true)
-    fetch(
-      `${API}/academic/subjects?email=${encodeURIComponent(user.email)}`
-    )
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Backend error")
+
+    let cancelled = false
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 8000
+
+    async function fetchSubjects(attempt: number) {
+      if (cancelled) return
+      try {
+        const res = await fetch(
+          `${API}/academic/subjects?email=${encodeURIComponent(user!.email)}`
+        )
+        if (!res.ok) throw new Error(`Backend error: ${res.status}`)
         const data = await res.json()
-        setSubjects(data)
-      })
-      .catch(() => {
-        // Backend unavailable -- tabs will show "No subjects found"
-      })
-      .finally(() => setSubjectsLoading(false))
+        if (!cancelled) {
+          setSubjects(data)
+          setSubjectsLoading(false)
+        }
+      } catch {
+        if (cancelled) return
+        if (attempt < MAX_RETRIES) {
+          // Backend may be cold-starting, retry after delay
+          await new Promise((r) => setTimeout(r, RETRY_DELAY))
+          fetchSubjects(attempt + 1)
+        } else {
+          setSubjectsLoading(false)
+        }
+      }
+    }
+
+    setSubjectsLoading(true)
+    fetchSubjects(0)
+
+    return () => { cancelled = true }
   }, [user?.email])
 
   const tabs: { id: TabId; label: string; icon: typeof FileText }[] = [

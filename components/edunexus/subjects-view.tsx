@@ -900,30 +900,48 @@ export function SubjectsView({ userRole }: { userRole: UserRole }) {
   
   const isAdmin = userRole === "admin"
 
-  // Fetch subjects from backend
+  // Fetch subjects from backend with retry for Render cold-start
   useEffect(() => {
     if (!user?.email) {
       setLoading(false)
       return
     }
 
-    setLoading(true)
-    getSubjects(user.email)
-      .then((backendSubjects) => {
+    let cancelled = false
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 8000
+
+    async function fetchWithRetry(attempt: number) {
+      if (cancelled) return
+      try {
+        const backendSubjects = await getSubjects(user!.email)
+        if (cancelled) return
         if (backendSubjects.length > 0) {
           const mapped = backendSubjects.map((s, i) =>
             mapBackendSubjectToFrontend(s, i)
           )
           setSubjects(mapped)
         }
-        // If backend returns empty, keep fallback subjects
         setBackendError(null)
-      })
-      .catch((err) => {
-        console.warn("[EduNexus] Could not fetch subjects from backend, using fallback:", err)
-        setBackendError("Using offline data - backend not connected")
-      })
-      .finally(() => setLoading(false))
+        setLoading(false)
+      } catch (err) {
+        if (cancelled) return
+        if (attempt < MAX_RETRIES) {
+          setBackendError("Backend is waking up, retrying...")
+          await new Promise((r) => setTimeout(r, RETRY_DELAY))
+          fetchWithRetry(attempt + 1)
+        } else {
+          console.warn("[EduNexus] Could not fetch subjects after retries:", err)
+          setBackendError("Using offline data - backend not connected")
+          setLoading(false)
+        }
+      }
+    }
+
+    setLoading(true)
+    fetchWithRetry(0)
+
+    return () => { cancelled = true }
   }, [user?.email])
 
   const theorySubjects = subjects.filter((s) => s.category === "theory")
