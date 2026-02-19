@@ -20,7 +20,7 @@ export async function aiExplain(
 
 export async function n8nChat(query: string) {
   const res = await fetch(
-    "https://ayushgiri05.app.n8n.cloud/webhook/website-chat",
+    "https://edunexus.app.n8n.cloud/webhook/website-chat",
     {
       method: "POST",
       headers: {
