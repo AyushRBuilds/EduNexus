@@ -15,12 +15,14 @@ import {
   Filter,
   Loader2,
   Sparkles,
+  Bot,
+  Zap,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
-import { aiExplain } from "@/lib/api/ai.service"
+import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
@@ -204,6 +206,11 @@ function AISynthesisCard({
   const [scholarLink, setScholarLink] = useState<string | null>(null)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
+  // n8n workflow state
+  const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
+  const [n8nLoading, setN8nLoading] = useState(false)
+  const [n8nError, setN8nError] = useState(false)
+
   // Call /ai/explain when we have a best subject
   useEffect(() => {
     if (!bestSubject || !query) return
@@ -226,6 +233,28 @@ function AISynthesisCard({
       .finally(() => setAiLoading(false))
   }, [query, bestSubject])
 
+  // Call n8n workflow whenever query changes
+  useEffect(() => {
+    if (!query) return
+
+    setN8nLoading(true)
+    setN8nError(false)
+    setN8nAnswer(null)
+
+    n8nChat(query)
+      .then((res) => {
+        if (res.error) {
+          setN8nError(true)
+        } else {
+          // n8n may return the answer in different fields depending on workflow config
+          const answer = res.output || res.text || res.response || res.message || null
+          setN8nAnswer(typeof answer === "string" ? answer : answer ? JSON.stringify(answer) : null)
+        }
+      })
+      .catch(() => setN8nError(true))
+      .finally(() => setN8nLoading(false))
+  }, [query])
+
   // Derive related subjects from matched materials
   const relatedSubjects = Array.from(
     new Set(materials.map((m) => m.subject?.name).filter(Boolean))
@@ -247,8 +276,8 @@ function AISynthesisCard({
             </h2>
             <p className="text-xs text-muted-foreground">
               {materials.length > 0
-                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""}`
-                : "Searching institutional sources..."}
+                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} + n8n workflow`
+                : "Searching institutional sources + n8n workflow..."}
             </p>
           </div>
         </div>
@@ -300,6 +329,50 @@ function AISynthesisCard({
             </p>
           </div>
         )}
+
+        {/* n8n Workflow Answer */}
+        <div className="mt-3 rounded-xl border border-border/50 bg-secondary/20 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
+              <Zap className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              n8n Workflow Intelligence
+            </h3>
+            {n8nLoading && (
+              <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Bot className="h-3 w-3 animate-pulse text-primary" />
+                Processing...
+              </span>
+            )}
+          </div>
+
+          {n8nLoading && (
+            <div className="space-y-2">
+              <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
+              <div className="h-4 w-4/5 animate-pulse rounded bg-secondary/50" />
+              <div className="h-4 w-3/5 animate-pulse rounded bg-secondary/50" />
+            </div>
+          )}
+
+          {!n8nLoading && n8nAnswer && (
+            <p className="whitespace-pre-line text-sm leading-relaxed text-secondary-foreground">
+              {n8nAnswer}
+            </p>
+          )}
+
+          {!n8nLoading && n8nError && (
+            <p className="text-xs italic text-muted-foreground">
+              Workflow response unavailable. The n8n automation could not process this query right now.
+            </p>
+          )}
+
+          {!n8nLoading && !n8nAnswer && !n8nError && (
+            <p className="text-xs italic text-muted-foreground">
+              No workflow response for this query.
+            </p>
+          )}
+        </div>
 
         {expanded && (
           <>
@@ -436,8 +509,8 @@ function AISynthesisCard({
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
         {materials.length > 0
-          ? `Answer grounded in ${materials.length} institutional source${materials.length !== 1 ? "s" : ""}`
-          : "Searching for relevant institutional content..."}
+          ? `Answer grounded in ${materials.length} institutional source${materials.length !== 1 ? "s" : ""} + n8n workflow`
+          : "Searching institutional content + n8n workflow..."}
       </p>
 
       {/* In-app material viewer */}
