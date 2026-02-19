@@ -10,8 +10,8 @@ import type { UserRole } from "./auth-context"
 const DEMO_ACCOUNTS = [
   {
     label: "Student",
-    email: "student@edu.in",
-    password: "student123",
+    email: "student@email.com",
+    password: "password",
     icon: GraduationCap,
     color: "text-emerald-400",
     borderColor: "border-emerald-500/30",
@@ -20,8 +20,8 @@ const DEMO_ACCOUNTS = [
   },
   {
     label: "Faculty",
-    email: "faculty@edu.in",
-    password: "faculty123",
+    email: "teacher@email.com",
+    password: "password",
     icon: BookOpen,
     color: "text-sky-400",
     borderColor: "border-sky-500/30",
@@ -30,8 +30,8 @@ const DEMO_ACCOUNTS = [
   },
   {
     label: "Admin",
-    email: "admin@edu.in",
-    password: "admin123",
+    email: "admin@email.com",
+    password: "password",
     icon: Shield,
     color: "text-amber-400",
     borderColor: "border-amber-500/30",

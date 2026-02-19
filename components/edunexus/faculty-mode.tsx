@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { EduNexusLogo } from "./edunexus-logo"
 import {
   Upload,
@@ -11,20 +11,127 @@ import {
   TrendingUp,
   Lightbulb,
   CheckCircle2,
+  Loader2,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { useAuth } from "./auth-context"
+import { getSubjects, uploadMaterial, addMaterial } from "@/lib/api/academic.service"
+import type { BackendSubject, BackendMaterial } from "@/lib/api/types"
 
 /* ----- Upload Panel ----- */
 function UploadPanel() {
-  const [files, setFiles] = useState<string[]>([])
+  const { user } = useAuth()
+  const [subjects, setSubjects] = useState<BackendSubject[]>([])
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [description, setDescription] = useState("")
+  const [files, setFiles] = useState<{ name: string; status: "uploading" | "indexed" | "error"; error?: string }[]>([])
   const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [subjectsLoading, setSubjectsLoading] = useState(true)
+
+  // Load subjects from backend
+  useEffect(() => {
+    if (!user?.email) {
+      setSubjectsLoading(false)
+      return
+    }
+    setSubjectsLoading(true)
+    getSubjects(user.email)
+      .then((data) => {
+        setSubjects(data)
+        if (data.length > 0) {
+          setSelectedSubjectId(String(data[0].id))
+        }
+      })
+      .catch(() => {
+        // Backend unavailable
+      })
+      .finally(() => setSubjectsLoading(false))
+  }, [user?.email])
+
+  const handleFileUpload = async (fileList: FileList | File[]) => {
+    const subjectId = Number(selectedSubjectId)
+    if (!subjectId) return
+
+    const newFiles = Array.from(fileList)
+    for (const file of newFiles) {
+      const fileName = file.name
+      setFiles((prev) => [...prev, { name: fileName, status: "uploading" }])
+      setUploading(true)
+
+      try {
+        await uploadMaterial(subjectId, "PDF", file, description || undefined)
+        setFiles((prev) =>
+          prev.map((f) => (f.name === fileName ? { ...f, status: "indexed" } : f))
+        )
+      } catch (err) {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.name === fileName
+              ? { ...f, status: "error", error: err instanceof Error ? err.message : "Upload failed" }
+              : f
+          )
+        )
+      } finally {
+        setUploading(false)
+      }
+    }
+  }
 
   return (
     <div className="glass rounded-2xl p-6">
       <h3 className="mb-4 text-sm font-semibold text-foreground">
         Content Upload & Indexing
       </h3>
+
+      {/* Subject selector */}
+      <div className="mb-4 space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Target Subject</label>
+          {subjectsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading subjects...
+            </div>
+          ) : subjects.length > 0 ? (
+            <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+              <SelectTrigger className="bg-secondary/30 border-border/40">
+                <SelectValue placeholder="Select a subject" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name} ({s.department}, Sem {s.semester})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-amber-400 py-2">
+              No subjects available. Backend may be offline.
+            </p>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Description (optional)</label>
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. Chapter 1: Arrays and Linked Lists"
+            className="bg-secondary/30 border-border/40"
+          />
+        </div>
+      </div>
+
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -34,8 +141,9 @@ function UploadPanel() {
         onDrop={(e) => {
           e.preventDefault()
           setDragging(false)
-          const names = Array.from(e.dataTransfer.files).map((f) => f.name)
-          setFiles((p) => [...p, ...names])
+          if (e.dataTransfer.files.length > 0) {
+            handleFileUpload(e.dataTransfer.files)
+          }
         }}
         className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
           dragging
@@ -50,6 +158,23 @@ function UploadPanel() {
         <p className="mt-1 text-xs text-muted-foreground">
           PDFs, Slides, Videos, Documents
         </p>
+        <label className="mt-3 cursor-pointer">
+          <input
+            type="file"
+            accept=".pdf,.ppt,.pptx,.doc,.docx"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                handleFileUpload(e.target.files)
+              }
+            }}
+          />
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+            <Upload className="h-3 w-3" />
+            Browse Files
+          </span>
+        </label>
       </div>
 
       {files.length > 0 && (
@@ -61,14 +186,34 @@ function UploadPanel() {
             >
               <FileText className="h-4 w-4 text-primary" />
               <span className="flex-1 truncate text-sm text-foreground">
-                {f}
+                {f.name}
               </span>
-              <Badge
-                variant="outline"
-                className="border-green-500/30 bg-green-500/10 text-green-400 text-[10px]"
-              >
-                Indexed
-              </Badge>
+              {f.status === "uploading" && (
+                <Badge
+                  variant="outline"
+                  className="border-sky-500/30 bg-sky-500/10 text-sky-400 text-[10px] gap-1"
+                >
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  Uploading
+                </Badge>
+              )}
+              {f.status === "indexed" && (
+                <Badge
+                  variant="outline"
+                  className="border-green-500/30 bg-green-500/10 text-green-400 text-[10px]"
+                >
+                  Indexed
+                </Badge>
+              )}
+              {f.status === "error" && (
+                <Badge
+                  variant="outline"
+                  className="border-red-500/30 bg-red-500/10 text-red-400 text-[10px]"
+                  title={f.error}
+                >
+                  Error
+                </Badge>
+              )}
             </div>
           ))}
         </div>
@@ -82,9 +227,9 @@ function UploadPanel() {
             AI Auto-Index Preview
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Uploaded content will be automatically parsed, chunked, and indexed
-            for semantic search. Key concepts, definitions, and formulas will be
-            extracted for the knowledge graph.
+            Uploaded PDFs will be automatically parsed (text extracted via PDFBox), 
+            and indexed for semantic search. The AI can then answer questions based 
+            on the uploaded content.
           </p>
         </div>
       </div>

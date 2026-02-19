@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { EduNexusLogo } from "./edunexus-logo"
 import {
   BookOpen,
@@ -13,9 +13,14 @@ import {
   Video,
   Presentation,
   Filter,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "./auth-context"
+import { getSubjects, getMaterials } from "@/lib/api/academic.service"
+import type { BackendMaterial } from "@/lib/api/types"
 
 /* ---------- Filter types ---------- */
 type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
@@ -31,6 +36,43 @@ const FILTERS: { id: ContentFilter; label: string; icon: typeof FileText }[] = [
 /* ---------- Synthesis Card ---------- */
 function AISynthesisCard({ query }: { query: string }) {
   const [expanded, setExpanded] = useState(false)
+  const { user } = useAuth()
+  const [backendMaterials, setBackendMaterials] = useState<BackendMaterial[]>([])
+  const [backendLoading, setBackendLoading] = useState(true)
+
+  // Attempt to load materials from backend that match the search query
+  useEffect(() => {
+    if (!user?.email) {
+      setBackendLoading(false)
+      return
+    }
+    setBackendLoading(true)
+    getSubjects(user.email)
+      .then(async (subjects) => {
+        // Load materials from all subjects to search through
+        const allMaterials: BackendMaterial[] = []
+        for (const subj of subjects.slice(0, 5)) {
+          try {
+            const mats = await getMaterials(subj.id)
+            allMaterials.push(...mats)
+          } catch {
+            // Skip subjects with errors
+          }
+        }
+        // Filter materials whose content or description matches the query
+        const q = query.toLowerCase()
+        const matched = allMaterials.filter(
+          (m) =>
+            (m.description && m.description.toLowerCase().includes(q)) ||
+            (m.content && m.content.toLowerCase().includes(q))
+        )
+        setBackendMaterials(matched.length > 0 ? matched : allMaterials.slice(0, 3))
+      })
+      .catch(() => {
+        // Backend unavailable, will show fallback content
+      })
+      .finally(() => setBackendLoading(false))
+  }, [user?.email, query])
 
   return (
     <div className="glass rounded-2xl p-6 glow-sm">
@@ -152,8 +194,43 @@ function AISynthesisCard({ query }: { query: string }) {
         )}
       </button>
 
+      {/* Backend materials section */}
+      {backendLoading && (
+        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Checking institutional repository...
+        </div>
+      )}
+      {!backendLoading && backendMaterials.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            From Your College Repository
+          </h3>
+          <div className="space-y-2">
+            {backendMaterials.slice(0, 3).map((mat) => (
+              <div key={mat.id} className="flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-3">
+                <FileText className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground">{mat.description || mat.filePath}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {mat.subject.name} &middot; {mat.type}
+                  </p>
+                  {mat.content && (
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                      {mat.content}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        Answer grounded in institutional academic content
+        {backendMaterials.length > 0
+          ? `Answer grounded in ${backendMaterials.length} institutional source${backendMaterials.length > 1 ? "s" : ""}`
+          : "Answer grounded in institutional academic content"}
       </p>
     </div>
   )

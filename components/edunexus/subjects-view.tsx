@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   BookOpen,
   FlaskConical,
@@ -11,13 +11,16 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  X,
   GraduationCap,
   Clock,
   BarChart3,
   Users,
   Star,
   AlertTriangle,
+  Loader2,
+  Bot,
+  Send,
+  ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -39,6 +42,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { UserRole } from "./auth-context"
+import { useAuth } from "./auth-context"
+import { getSubjects, getMaterials } from "@/lib/api/academic.service"
+import { aiExplain } from "@/lib/api/ai.service"
+import type {
+  BackendSubject,
+  BackendMaterial,
+  AIExplainResponse,
+} from "@/lib/api/types"
 
 /* -------- Types -------- */
 interface Paper {
@@ -60,6 +71,7 @@ interface QuestionTopic {
 
 interface Subject {
   id: string
+  backendId?: number
   name: string
   code: string
   category: "theory" | "lab"
@@ -73,8 +85,8 @@ interface Subject {
   questionTopics: QuestionTopic[]
 }
 
-/* -------- Initial Data -------- */
-const INITIAL_SUBJECTS: Subject[] = [
+/* -------- Fallback Data -------- */
+const FALLBACK_SUBJECTS: Subject[] = [
   {
     id: "am3",
     name: "Applied Mathematics III",
@@ -89,16 +101,10 @@ const INITIAL_SUBJECTS: Subject[] = [
     papers: [
       { id: "p1", label: "End Semester 2024", year: 2024, semester: "Even", difficulty: "Hard", pages: 8 },
       { id: "p2", label: "Mid Semester 2024", year: 2024, semester: "Even", difficulty: "Medium", pages: 4 },
-      { id: "p3", label: "End Semester 2023", year: 2023, semester: "Even", difficulty: "Hard", pages: 8 },
-      { id: "p4", label: "Mid Semester 2023", year: 2023, semester: "Even", difficulty: "Easy", pages: 4 },
-      { id: "p5", label: "End Semester 2022", year: 2022, semester: "Even", difficulty: "Medium", pages: 8 },
     ],
     questionTopics: [
       { id: "q1", topic: "Laplace Transforms", questionCount: 25, difficulty: "Hard", lastUpdated: "Dec 2024" },
       { id: "q2", topic: "Fourier Series", questionCount: 20, difficulty: "Medium", lastUpdated: "Nov 2024" },
-      { id: "q3", topic: "Z-Transforms", questionCount: 18, difficulty: "Hard", lastUpdated: "Oct 2024" },
-      { id: "q4", topic: "Complex Variables", questionCount: 22, difficulty: "Medium", lastUpdated: "Dec 2024" },
-      { id: "q5", topic: "Vector Calculus", questionCount: 15, difficulty: "Easy", lastUpdated: "Sep 2024" },
     ],
   },
   {
@@ -114,117 +120,41 @@ const INITIAL_SUBJECTS: Subject[] = [
     color: "from-emerald-500/20 to-green-600/20 border-emerald-500/30",
     papers: [
       { id: "p6", label: "End Semester 2024", year: 2024, semester: "Even", difficulty: "Hard", pages: 10 },
-      { id: "p7", label: "Mid Semester 2024", year: 2024, semester: "Even", difficulty: "Medium", pages: 5 },
-      { id: "p8", label: "End Semester 2023", year: 2023, semester: "Even", difficulty: "Medium", pages: 10 },
     ],
     questionTopics: [
       { id: "q6", topic: "Binary Trees & BST", questionCount: 30, difficulty: "Medium", lastUpdated: "Dec 2024" },
-      { id: "q7", topic: "Graph Algorithms", questionCount: 28, difficulty: "Hard", lastUpdated: "Nov 2024" },
-      { id: "q8", topic: "Sorting & Searching", questionCount: 22, difficulty: "Easy", lastUpdated: "Oct 2024" },
-      { id: "q9", topic: "Dynamic Programming", questionCount: 35, difficulty: "Hard", lastUpdated: "Dec 2024" },
-    ],
-  },
-  {
-    id: "dbms",
-    name: "Database Management Systems",
-    code: "CS302",
-    category: "theory",
-    semester: 4,
-    credits: 3,
-    instructor: "Prof. Anand Kulkarni",
-    students: 275,
-    rating: 4.3,
-    color: "from-amber-500/20 to-orange-600/20 border-amber-500/30",
-    papers: [
-      { id: "p9", label: "End Semester 2024", year: 2024, semester: "Odd", difficulty: "Medium", pages: 8 },
-      { id: "p10", label: "End Semester 2023", year: 2023, semester: "Odd", difficulty: "Hard", pages: 8 },
-    ],
-    questionTopics: [
-      { id: "q10", topic: "SQL Queries & Joins", questionCount: 40, difficulty: "Medium", lastUpdated: "Jan 2025" },
-      { id: "q11", topic: "Normalization", questionCount: 20, difficulty: "Hard", lastUpdated: "Dec 2024" },
-      { id: "q12", topic: "ER Diagrams", questionCount: 15, difficulty: "Easy", lastUpdated: "Nov 2024" },
-    ],
-  },
-  {
-    id: "os",
-    name: "Operating Systems",
-    code: "CS303",
-    category: "theory",
-    semester: 4,
-    credits: 3,
-    instructor: "Dr. Meera Joshi",
-    students: 260,
-    rating: 4.1,
-    color: "from-rose-500/20 to-pink-600/20 border-rose-500/30",
-    papers: [
-      { id: "p11", label: "End Semester 2024", year: 2024, semester: "Odd", difficulty: "Hard", pages: 8 },
-    ],
-    questionTopics: [
-      { id: "q13", topic: "Process Scheduling", questionCount: 18, difficulty: "Medium", lastUpdated: "Dec 2024" },
-      { id: "q14", topic: "Memory Management", questionCount: 22, difficulty: "Hard", lastUpdated: "Nov 2024" },
-    ],
-  },
-  // Labs
-  {
-    id: "dsa-lab",
-    name: "DSA Laboratory",
-    code: "CS201L",
-    category: "lab",
-    semester: 3,
-    credits: 2,
-    instructor: "Dr. Priya Nair",
-    students: 290,
-    rating: 4.6,
-    color: "from-violet-500/20 to-purple-600/20 border-violet-500/30",
-    papers: [
-      { id: "p12", label: "Lab Practical 2024", year: 2024, semester: "Even", difficulty: "Medium", pages: 4 },
-      { id: "p13", label: "Lab Practical 2023", year: 2023, semester: "Even", difficulty: "Easy", pages: 4 },
-    ],
-    questionTopics: [
-      { id: "q15", topic: "Linked List Implementation", questionCount: 12, difficulty: "Easy", lastUpdated: "Dec 2024" },
-      { id: "q16", topic: "Tree Traversal Coding", questionCount: 15, difficulty: "Medium", lastUpdated: "Nov 2024" },
-      { id: "q17", topic: "Graph BFS/DFS Coding", questionCount: 10, difficulty: "Hard", lastUpdated: "Oct 2024" },
-    ],
-  },
-  {
-    id: "dbms-lab",
-    name: "DBMS Laboratory",
-    code: "CS302L",
-    category: "lab",
-    semester: 4,
-    credits: 2,
-    instructor: "Prof. Anand Kulkarni",
-    students: 275,
-    rating: 4.4,
-    color: "from-teal-500/20 to-cyan-600/20 border-teal-500/30",
-    papers: [
-      { id: "p14", label: "Lab Practical 2024", year: 2024, semester: "Odd", difficulty: "Medium", pages: 3 },
-    ],
-    questionTopics: [
-      { id: "q18", topic: "SQL Practicals", questionCount: 20, difficulty: "Easy", lastUpdated: "Jan 2025" },
-      { id: "q19", topic: "PL/SQL Programs", questionCount: 15, difficulty: "Medium", lastUpdated: "Dec 2024" },
-    ],
-  },
-  {
-    id: "os-lab",
-    name: "OS Laboratory",
-    code: "CS303L",
-    category: "lab",
-    semester: 4,
-    credits: 2,
-    instructor: "Dr. Meera Joshi",
-    students: 260,
-    rating: 4.0,
-    color: "from-pink-500/20 to-red-600/20 border-pink-500/30",
-    papers: [
-      { id: "p15", label: "Lab Practical 2024", year: 2024, semester: "Odd", difficulty: "Hard", pages: 4 },
-    ],
-    questionTopics: [
-      { id: "q20", topic: "Shell Scripting", questionCount: 10, difficulty: "Easy", lastUpdated: "Dec 2024" },
-      { id: "q21", topic: "Process Sync Programs", questionCount: 12, difficulty: "Hard", lastUpdated: "Nov 2024" },
     ],
   },
 ]
+
+const SUBJECT_COLORS = [
+  "from-sky-500/20 to-blue-600/20 border-sky-500/30",
+  "from-emerald-500/20 to-green-600/20 border-emerald-500/30",
+  "from-amber-500/20 to-orange-600/20 border-amber-500/30",
+  "from-rose-500/20 to-pink-600/20 border-rose-500/30",
+  "from-teal-500/20 to-cyan-600/20 border-teal-500/30",
+]
+
+function mapBackendSubjectToFrontend(
+  subj: BackendSubject,
+  index: number
+): Subject {
+  return {
+    id: `backend-${subj.id}`,
+    backendId: subj.id,
+    name: subj.name,
+    code: `${subj.department.slice(0, 3).toUpperCase()}${subj.semester}0${index + 1}`,
+    category: "theory",
+    semester: subj.semester,
+    credits: 3,
+    instructor: subj.department,
+    students: 0,
+    rating: 0,
+    color: SUBJECT_COLORS[index % SUBJECT_COLORS.length],
+    papers: [],
+    questionTopics: [],
+  }
+}
 
 /* -------- Difficulty Badge -------- */
 function DifficultyBadge({ difficulty }: { difficulty: "Easy" | "Medium" | "Hard" }) {
@@ -242,6 +172,7 @@ function DifficultyBadge({ difficulty }: { difficulty: "Easy" | "Medium" | "Hard
 
 /* -------- Star Rating -------- */
 function StarRating({ rating }: { rating: number }) {
+  if (rating === 0) return <span className="text-[11px] text-muted-foreground">No ratings yet</span>
   return (
     <div className="flex items-center gap-1">
       {Array.from({ length: 5 }).map((_, i) => (
@@ -283,7 +214,6 @@ function SubjectCard({
       )}
       onClick={onClick}
     >
-      {/* Admin delete button */}
       {isAdmin && (
         <button
           onClick={(e) => {
@@ -297,14 +227,10 @@ function SubjectCard({
         </button>
       )}
 
-      {/* Color accent bar */}
       <div className={cn("absolute inset-x-0 top-0 h-1 rounded-t-xl bg-gradient-to-r", subject.color)} />
 
       <div className="flex items-start gap-3 mt-1">
-        <div className={cn(
-          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br",
-          subject.color
-        )}>
+        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br", subject.color)}>
           {subject.category === "theory" ? (
             <BookOpen className="h-5 w-5 text-foreground/80" />
           ) : (
@@ -332,10 +258,12 @@ function SubjectCard({
               <GraduationCap className="h-3 w-3" />
               {subject.instructor}
             </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {subject.students}
-            </span>
+            {subject.students > 0 && (
+              <span className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                {subject.students}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 mt-3">
@@ -356,7 +284,7 @@ function SubjectCard({
   )
 }
 
-/* -------- Subject Detail View -------- */
+/* -------- Subject Detail View (with Materials + AI) -------- */
 function SubjectDetail({
   subject,
   onBack,
@@ -364,11 +292,51 @@ function SubjectDetail({
   subject: Subject
   onBack: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<"papers" | "questions">("papers")
+  const [activeTab, setActiveTab] = useState<"papers" | "questions" | "materials" | "ai">(
+    subject.backendId ? "materials" : "papers"
+  )
+  const [materials, setMaterials] = useState<BackendMaterial[]>([])
+  const [materialsLoading, setMaterialsLoading] = useState(false)
+  const [materialsError, setMaterialsError] = useState<string | null>(null)
+
+  // AI state
+  const [aiQuestion, setAiQuestion] = useState("")
+  const [aiResponse, setAiResponse] = useState<AIExplainResponse | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  useEffect(() => {
+    if (subject.backendId) {
+      setMaterialsLoading(true)
+      getMaterials(subject.backendId)
+        .then((data) => {
+          setMaterials(data)
+          setMaterialsError(null)
+        })
+        .catch((err) => {
+          setMaterialsError(err instanceof Error ? err.message : "Failed to load materials")
+        })
+        .finally(() => setMaterialsLoading(false))
+    }
+  }, [subject.backendId])
+
+  const handleAskAI = async () => {
+    if (!aiQuestion.trim() || !subject.backendId) return
+    setAiLoading(true)
+    setAiResponse(null)
+    try {
+      const response = await aiExplain(aiQuestion, subject.backendId)
+      setAiResponse(response)
+    } catch (err) {
+      setAiResponse({
+        error: err instanceof Error ? err.message : "AI service unavailable",
+      })
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl">
-      {/* Back button + header */}
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 group"
@@ -379,10 +347,7 @@ function SubjectDetail({
 
       <div className="glass rounded-xl p-5 mb-6">
         <div className="flex items-start gap-4">
-          <div className={cn(
-            "h-14 w-14 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br",
-            subject.color
-          )}>
+          <div className={cn("h-14 w-14 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br", subject.color)}>
             {subject.category === "theory" ? (
               <BookOpen className="h-7 w-7 text-foreground/80" />
             ) : (
@@ -400,17 +365,50 @@ function SubjectDetail({
                 <GraduationCap className="h-3.5 w-3.5" />
                 {subject.instructor}
               </span>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Users className="h-3.5 w-3.5" />
-                {subject.students} students
-              </span>
+              {subject.students > 0 && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5" />
+                  {subject.students} students
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Tab switch */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {subject.backendId && (
+          <>
+            <button
+              onClick={() => setActiveTab("materials")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all",
+                activeTab === "materials"
+                  ? "bg-primary/15 text-primary glow-sm"
+                  : "bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              )}
+            >
+              <FileText className="h-4 w-4" />
+              Materials
+              <Badge variant="outline" className="ml-1 text-[10px] border-primary/20 bg-primary/10 text-primary">
+                {materials.length}
+              </Badge>
+            </button>
+            <button
+              onClick={() => setActiveTab("ai")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all",
+                activeTab === "ai"
+                  ? "bg-primary/15 text-primary glow-sm"
+                  : "bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              )}
+            >
+              <Bot className="h-4 w-4" />
+              Ask AI
+            </button>
+          </>
+        )}
         <button
           onClick={() => setActiveTab("papers")}
           className={cn(
@@ -442,6 +440,130 @@ function SubjectDetail({
           </Badge>
         </button>
       </div>
+
+      {/* Materials list (from backend) */}
+      {activeTab === "materials" && (
+        <div className="space-y-2">
+          {materialsLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading materials...</span>
+            </div>
+          )}
+          {materialsError && (
+            <div className="glass rounded-xl p-6 text-center">
+              <p className="text-sm text-red-400">{materialsError}</p>
+            </div>
+          )}
+          {!materialsLoading && !materialsError && materials.length === 0 && (
+            <div className="glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
+              <FileText className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No materials uploaded yet for this subject</p>
+            </div>
+          )}
+          {materials.map((mat) => (
+            <div
+              key={mat.id}
+              className="glass rounded-xl p-4 flex items-start gap-4 hover:border-primary/20 transition-all group"
+            >
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-medium text-foreground">
+                  {mat.description || mat.filePath}
+                </h4>
+                <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                  <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20">
+                    {mat.type}
+                  </Badge>
+                  {mat.filePath && (
+                    <span className="truncate max-w-[200px]">{mat.filePath}</span>
+                  )}
+                </div>
+                {mat.content && (
+                  <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                    {mat.content}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* AI Ask tab */}
+      {activeTab === "ai" && subject.backendId && (
+        <div className="space-y-4">
+          <div className="glass rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              Ask AI about {subject.name}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Ask any question and the AI will answer using the materials uploaded for this subject (RAG-based).
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAskAI()}
+                placeholder={`e.g. Explain linked lists from ${subject.name}`}
+                className="bg-secondary/30 border-border/40 flex-1"
+              />
+              <Button
+                onClick={handleAskAI}
+                disabled={aiLoading || !aiQuestion.trim()}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Ask
+              </Button>
+            </div>
+          </div>
+
+          {aiResponse && (
+            <div className="glass rounded-xl p-5">
+              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                <Bot className="h-4 w-4 text-primary" />
+                AI Response
+              </h4>
+              {aiResponse.error && (
+                <p className="text-sm text-red-400">{aiResponse.error}</p>
+              )}
+              {aiResponse.message && (
+                <div>
+                  <p className="text-sm text-muted-foreground">{aiResponse.message}</p>
+                  {aiResponse.scholarLink && (
+                    <a
+                      href={aiResponse.scholarLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Search on Google Scholar
+                    </a>
+                  )}
+                </div>
+              )}
+              {aiResponse.answer && (
+                <p className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
+                  {aiResponse.answer}
+                </p>
+              )}
+              {/* Handle HuggingFace raw response (could be array or string) */}
+              {!aiResponse.answer && !aiResponse.message && !aiResponse.error && (
+                <p className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap">
+                  {typeof aiResponse === "string"
+                    ? aiResponse
+                    : JSON.stringify(aiResponse, null, 2)}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Papers list */}
       {activeTab === "papers" && (
@@ -475,6 +597,12 @@ function SubjectDetail({
               </Button>
             </div>
           ))}
+          {subject.papers.length === 0 && (
+            <div className="glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
+              <FileText className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No papers available</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -513,6 +641,12 @@ function SubjectDetail({
               </Button>
             </div>
           ))}
+          {subject.questionTopics.length === 0 && (
+            <div className="glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
+              <HelpCircle className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">No questions available</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -539,15 +673,6 @@ function AddSubjectDialog({
   const handleAdd = () => {
     if (!name.trim() || !code.trim() || !instructor.trim()) return
 
-    const colors = [
-      "from-sky-500/20 to-blue-600/20 border-sky-500/30",
-      "from-emerald-500/20 to-green-600/20 border-emerald-500/30",
-      "from-amber-500/20 to-orange-600/20 border-amber-500/30",
-      "from-rose-500/20 to-pink-600/20 border-rose-500/30",
-      "from-violet-500/20 to-purple-600/20 border-violet-500/30",
-      "from-teal-500/20 to-cyan-600/20 border-teal-500/30",
-    ]
-
     const newSubject: Subject = {
       id: `subj-${Date.now()}`,
       name: name.trim(),
@@ -558,7 +683,7 @@ function AddSubjectDialog({
       instructor: instructor.trim(),
       students: 0,
       rating: 0,
-      color: colors[Math.floor(Math.random() * colors.length)],
+      color: SUBJECT_COLORS[Math.floor(Math.random() * SUBJECT_COLORS.length)],
       papers: [],
       questionTopics: [],
     }
@@ -724,13 +849,43 @@ function DeleteConfirmDialog({
    Main Export
    ================================================================ */
 export function SubjectsView({ userRole }: { userRole: UserRole }) {
-  const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS)
+  const { user } = useAuth()
+  const [subjects, setSubjects] = useState<Subject[]>(FALLBACK_SUBJECTS)
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Subject | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [backendError, setBackendError] = useState<string | null>(null)
 
   const isAdmin = userRole === "admin"
+
+  // Fetch subjects from backend
+  useEffect(() => {
+    if (!user?.email) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    getSubjects(user.email)
+      .then((backendSubjects) => {
+        if (backendSubjects.length > 0) {
+          const mapped = backendSubjects.map((s, i) =>
+            mapBackendSubjectToFrontend(s, i)
+          )
+          setSubjects(mapped)
+        }
+        // If backend returns empty, keep fallback subjects
+        setBackendError(null)
+      })
+      .catch((err) => {
+        console.warn("[EduNexus] Could not fetch subjects from backend, using fallback:", err)
+        setBackendError("Using offline data - backend not connected")
+      })
+      .finally(() => setLoading(false))
+  }, [user?.email])
+
   const theorySubjects = subjects.filter((s) => s.category === "theory")
   const labSubjects = subjects.filter((s) => s.category === "lab")
 
@@ -782,111 +937,131 @@ export function SubjectsView({ userRole }: { userRole: UserRole }) {
         )}
       </div>
 
-      {/* Stats bar */}
-      <div className="flex items-center gap-4 mb-6 glass rounded-xl px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <BookOpen className="h-3.5 w-3.5 text-sky-400" />
-          <span className="font-medium text-foreground">{theorySubjects.length}</span> Theory
+      {/* Connection status */}
+      {backendError && (
+        <div className="mb-4 glass rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-amber-400 border border-amber-500/20 bg-amber-500/5">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {backendError}
         </div>
-        <div className="h-4 w-px bg-border/40" />
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <FlaskConical className="h-3.5 w-3.5 text-violet-400" />
-          <span className="font-medium text-foreground">{labSubjects.length}</span> Practical Labs
-        </div>
-        <div className="h-4 w-px bg-border/40" />
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <FileText className="h-3.5 w-3.5 text-amber-400" />
-          <span className="font-medium text-foreground">
-            {subjects.reduce((sum, s) => sum + s.papers.length, 0)}
-          </span> Total Papers
-        </div>
-      </div>
+      )}
 
-      <ScrollArea className="h-[calc(100vh-280px)]">
-        {/* Theory Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-7 w-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
-              <BookOpen className="h-4 w-4 text-sky-400" />
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading subjects...</span>
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* Stats bar */}
+          <div className="flex items-center gap-4 mb-6 glass rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5 text-sky-400" />
+              <span className="font-medium text-foreground">{theorySubjects.length}</span> Theory
             </div>
-            <h3 className="text-sm font-semibold text-foreground">Theory Courses</h3>
-            <span className="text-xs text-muted-foreground ml-1">({theorySubjects.length})</span>
+            <div className="h-4 w-px bg-border/40" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <FlaskConical className="h-3.5 w-3.5 text-violet-400" />
+              <span className="font-medium text-foreground">{labSubjects.length}</span> Practical Labs
+            </div>
+            <div className="h-4 w-px bg-border/40" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <FileText className="h-3.5 w-3.5 text-amber-400" />
+              <span className="font-medium text-foreground">
+                {subjects.reduce((sum, s) => sum + s.papers.length, 0)}
+              </span> Total Papers
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {theorySubjects.map((subject) => (
-              <SubjectCard
-                key={subject.id}
-                subject={subject}
-                onClick={() => setSelectedSubject(subject)}
-                isAdmin={isAdmin}
-                onDelete={() => {
-                  setDeleteTarget(subject)
-                  setDeleteDialogOpen(true)
-                }}
-              />
-            ))}
-            {theorySubjects.length === 0 && (
-              <div className="col-span-2 glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
-                <BookOpen className="h-8 w-8 text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">No theory courses added yet</p>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setAddDialogOpen(true)}
-                    className="text-primary text-xs mt-1"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add one
-                  </Button>
+
+          <ScrollArea className="h-[calc(100vh-280px)]">
+            {/* Theory Section */}
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-7 w-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
+                  <BookOpen className="h-4 w-4 text-sky-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Theory Courses</h3>
+                <span className="text-xs text-muted-foreground ml-1">({theorySubjects.length})</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {theorySubjects.map((subject) => (
+                  <SubjectCard
+                    key={subject.id}
+                    subject={subject}
+                    onClick={() => setSelectedSubject(subject)}
+                    isAdmin={isAdmin}
+                    onDelete={() => {
+                      setDeleteTarget(subject)
+                      setDeleteDialogOpen(true)
+                    }}
+                  />
+                ))}
+                {theorySubjects.length === 0 && (
+                  <div className="col-span-2 glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
+                    <BookOpen className="h-8 w-8 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">No theory courses added yet</p>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setAddDialogOpen(true)}
+                        className="text-primary text-xs mt-1"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add one
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Practical Labs Section */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-7 w-7 rounded-lg bg-violet-500/15 flex items-center justify-center">
-              <FlaskConical className="h-4 w-4 text-violet-400" />
             </div>
-            <h3 className="text-sm font-semibold text-foreground">Practical Labs</h3>
-            <span className="text-xs text-muted-foreground ml-1">({labSubjects.length})</span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {labSubjects.map((subject) => (
-              <SubjectCard
-                key={subject.id}
-                subject={subject}
-                onClick={() => setSelectedSubject(subject)}
-                isAdmin={isAdmin}
-                onDelete={() => {
-                  setDeleteTarget(subject)
-                  setDeleteDialogOpen(true)
-                }}
-              />
-            ))}
-            {labSubjects.length === 0 && (
-              <div className="col-span-2 glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
-                <FlaskConical className="h-8 w-8 text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">No lab courses added yet</p>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setAddDialogOpen(true)}
-                    className="text-primary text-xs mt-1"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add one
-                  </Button>
+
+            {/* Practical Labs Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-7 w-7 rounded-lg bg-violet-500/15 flex items-center justify-center">
+                  <FlaskConical className="h-4 w-4 text-violet-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Practical Labs</h3>
+                <span className="text-xs text-muted-foreground ml-1">({labSubjects.length})</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {labSubjects.map((subject) => (
+                  <SubjectCard
+                    key={subject.id}
+                    subject={subject}
+                    onClick={() => setSelectedSubject(subject)}
+                    isAdmin={isAdmin}
+                    onDelete={() => {
+                      setDeleteTarget(subject)
+                      setDeleteDialogOpen(true)
+                    }}
+                  />
+                ))}
+                {labSubjects.length === 0 && (
+                  <div className="col-span-2 glass rounded-xl p-8 flex flex-col items-center gap-2 text-center">
+                    <FlaskConical className="h-8 w-8 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">No lab courses added yet</p>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setAddDialogOpen(true)}
+                        className="text-primary text-xs mt-1"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add one
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      </ScrollArea>
+            </div>
+          </ScrollArea>
+        </>
+      )}
 
       {/* Admin dialogs */}
       <AddSubjectDialog
