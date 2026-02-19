@@ -18,37 +18,24 @@ export async function aiExplain(
 
 /* ---------- n8n Workflow Chat ---------- */
 
-export interface N8nChatResponse {
-  /** The normalised answer text from the n8n workflow */
-  output: string | null
-  /** Hint / error description when something went wrong */
-  error?: string
-  hint?: string
-}
-
-/**
- * POST /api/n8n-chat  (proxied to the real n8n webhook)
- * Sends a search query to the n8n workflow and returns the answer.
- */
-export async function n8nChat(query: string): Promise<N8nChatResponse> {
-  const res = await fetch("/api/n8n-chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  })
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}))
-    return {
-      output: null,
-      error: errBody.error || `n8n request failed (${res.status})`,
-      hint: errBody.hint,
+export async function n8nChat(query: string) {
+  const res = await fetch(
+    "https://ayushgiri05.app.n8n.cloud/webhook/website-chat",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question: query,
+      }),
     }
-  }
+  );
 
-  const data = await res.json()
+  const data = await res.json();
+
   return {
-    output: data.output ?? null,
+    output: data.answer ?? data.output ?? null,
     error: data.error,
-  }
+  };
 }
