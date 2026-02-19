@@ -178,6 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const demoUser = DEMO_ACCOUNTS[email.toLowerCase()]
       if (demoUser && password === DEMO_PASSWORD) {
         setUser(demoUser)
+        // Also register/login with the backend so subjects API works
+        fetch("/api/proxy/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: demoUser.email }),
+        }).catch(() => {/* backend may be cold-starting */})
         return { success: true }
       }
       if (demoUser && password !== DEMO_PASSWORD) {
