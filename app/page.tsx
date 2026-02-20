@@ -18,6 +18,7 @@ import { ResearchHub } from "@/components/edunexus/research-hub"
 import { ProfilePanel } from "@/components/edunexus/profile-panel"
 import { EduNexusLogo } from "@/components/edunexus/edunexus-logo"
 import { InitAnimation } from "@/components/edunexus/init-animation"
+import { StudentDemo } from "@/components/edunexus/student-demo"
 
 export default function EduNexusPage() {
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth()
