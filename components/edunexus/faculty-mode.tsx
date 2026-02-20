@@ -326,32 +326,12 @@ function UploadPdfTab() {
     setMessage(null)
 
     try {
-      // Pre-upload validation
-      const maxFileSize = 100 * 1024 * 1024 // 100MB
-      if (selectedFile.size > maxFileSize) {
-        throw new Error(
-          `File too large (${(selectedFile.size / 1024 / 1024).toFixed(2)}MB). Maximum is 100MB.`
-        )
-      }
-
-      if (!title || title.trim().length === 0) {
-        throw new Error("Please provide a title for the material")
-      }
-
-      if (title.length > 255) {
-        throw new Error("Title is too long (max 255 characters)")
-      }
-
-      if (!resolvedSubject || resolvedSubject.trim().length === 0) {
-        throw new Error("Please select or specify a subject")
-      }
-
       const formData = new FormData()
       formData.append("facultyEmail", user?.email || "anonymous@edunexus.com")
       formData.append("facultyName", user?.name || "Faculty")
       formData.append("subject", resolvedSubject)
       formData.append("type", "PDF")
-      formData.append("title", title)
+      formData.append("title", title || selectedFile.name)
       formData.append("description", description || selectedFile.name)
       formData.append("tags", tags)
       formData.append("file", selectedFile)
@@ -361,37 +341,9 @@ function UploadPdfTab() {
         body: formData,
       })
 
-      const responseData = await res.json().catch(() => ({
-        error: "Unable to parse server response",
-      }))
-
       if (!res.ok) {
-        // Extract user-friendly error message from response
-        const errorMessage =
-          responseData?.error ||
-          responseData?.details ||
-          `Upload failed (Error ${res.status})`
-
-        // Special handling for specific error codes
-        if (responseData?.code === "FILE_TOO_LARGE") {
-          throw new Error(
-            `${errorMessage} - Please reduce file size or contact support`
-          )
-        } else if (responseData?.code === "INVALID_FILE_TYPE") {
-          throw new Error(
-            `${errorMessage} - Supported: PDF, DOC, DOCX, PPT, PPTX, TXT, PNG, JPG`
-          )
-        } else if (responseData?.code === "STORAGE_ERROR") {
-          throw new Error(
-            `${errorMessage} - Storage issue. Please try again or contact administrator.`
-          )
-        } else if (responseData?.code === "DATABASE_ERROR") {
-          throw new Error(
-            `${errorMessage} - Database error. Your file may have been saved but not indexed.`
-          )
-        }
-
-        throw new Error(errorMessage)
+        const err = await res.json().catch(() => ({ error: "Upload failed" }))
+        throw new Error(err.error || `Server returned ${res.status}`)
       }
 
       setMessage({
@@ -557,18 +509,18 @@ function UploadPdfTab() {
       {/* Message */}
       {message && (
         <div
-          className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
             message.type === "success"
               ? "border-green-500/20 bg-green-500/10 text-green-400"
               : "border-red-500/20 bg-red-500/10 text-red-400"
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           ) : (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           )}
-          <p className="flex-1 leading-relaxed">{message.text}</p>
+          {message.text}
         </div>
       )}
 
@@ -578,16 +530,11 @@ function UploadPdfTab() {
         className="w-full gap-2"
       >
         {isLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Uploading...
-          </>
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <>
-            <Upload className="h-4 w-4" />
-            Upload File
-          </>
+          <Upload className="h-4 w-4" />
         )}
+        {isLoading ? "Uploading..." : "Upload File"}
       </Button>
 
       {/* Storage info */}

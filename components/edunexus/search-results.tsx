@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
-import { aiExplain, n8nChat, aiSynthesisSearch } from "@/lib/api/ai.service"
+import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
@@ -260,49 +260,43 @@ function AISynthesisCard({
   const [expanded, setExpanded] = useState(false)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // AI Synthesis with hardcoded knowledge base
-  const [synthesisAnswer, setSynthesisAnswer] = useState<string | null>(null)
-  const [synthesisLoading, setSynthesisLoading] = useState(false)
-  const [synthesisError, setSynthesisError] = useState(false)
-  const [synthesisSource, setSynthesisSource] = useState<string | null>(null)
-  const [isHardcoded, setIsHardcoded] = useState(false)
+  // n8n is the PRIMARY AI source for search & explain
+  const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
+  const [n8nLoading, setN8nLoading] = useState(false)
+  const [n8nError, setN8nError] = useState(false)
 
-  // Fallback: old backend AI explain (used only when synthesis fails)
+  // Fallback: old backend AI explain (used only when n8n fails)
   const [fallbackAnswer, setFallbackAnswer] = useState<string | null>(null)
   const [fallbackLoading, setFallbackLoading] = useState(false)
   const [fallbackError, setFallbackError] = useState(false)
   const [scholarLink, setScholarLink] = useState<string | null>(null)
 
-  // 1. Call AI Synthesis Search (primary) - checks hardcoded KB first, then n8n
+  // 1. Call n8n workflow (primary) whenever query changes
   useEffect(() => {
     if (!query) return
 
-    setSynthesisLoading(true)
-    setSynthesisError(false)
-    setSynthesisAnswer(null)
-    setSynthesisSource(null)
-    setIsHardcoded(false)
+    setN8nLoading(true)
+    setN8nError(false)
+    setN8nAnswer(null)
 
-    aiSynthesisSearch(query)
+    n8nChat(query)
       .then((res) => {
-        setSynthesisAnswer(res.synthesis)
-        setSynthesisSource(res.source)
-        setIsHardcoded(res.isHardcoded)
-        if (!res.synthesis) {
-          setSynthesisError(true)
+        if (res.error || !res.output) {
+          setN8nError(true)
+        } else {
+          setN8nAnswer(res.output)
         }
       })
-      .catch((error) => {
-        console.error("[v0] Synthesis search error:", error)
-        setSynthesisError(true)
+      .catch(() => {
+        setN8nError(true)
       })
-      .finally(() => setSynthesisLoading(false))
+      .finally(() => setN8nLoading(false))
   }, [query])
 
-  // 2. Call backend /ai/explain as fallback when synthesis fails
+  // 2. Call backend /ai/explain as fallback when n8n fails
   useEffect(() => {
-    // Only call fallback if synthesis has finished and failed
-    if (synthesisLoading || !synthesisError) return
+    // Only call fallback if n8n has finished and failed
+    if (n8nLoading || !n8nError) return
     if (!bestSubject || !query) return
 
     setFallbackLoading(true)
@@ -321,13 +315,13 @@ function AISynthesisCard({
       })
       .catch(() => setFallbackError(true))
       .finally(() => setFallbackLoading(false))
-  }, [query, bestSubject, synthesisLoading, synthesisError])
+  }, [query, bestSubject, n8nLoading, n8nError])
 
   // Derived: the best available answer
-  const aiAnswer = synthesisAnswer || fallbackAnswer
-  const aiLoading = synthesisLoading || (synthesisError && fallbackLoading)
-  const aiError = synthesisError && fallbackError
-  const answerSource = isHardcoded ? "Hardcoded KB" : synthesisSource === "n8n" ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
+  const aiAnswer = n8nAnswer || fallbackAnswer
+  const aiLoading = n8nLoading || (n8nError && fallbackLoading)
+  const aiError = n8nError && fallbackError
+  const answerSource = n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
 
   // Derive related subjects from matched materials
   const relatedSubjects = Array.from(
