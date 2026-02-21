@@ -22,6 +22,7 @@ import {
   GraduationCap,
   CheckCircle2,
   Upload,
+  Eye,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -429,8 +430,8 @@ function AISynthesisCard({
       {/* Repository source status banner */}
       {!materialsLoading && (
         <div className={`mb-4 rounded-xl border px-4 py-3 flex items-center gap-3 ${hasRepoSources
-            ? "border-emerald-500/30 bg-emerald-500/5"
-            : "border-amber-500/30 bg-amber-500/5"
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-amber-500/30 bg-amber-500/5"
           }`}>
           {hasRepoSources ? (
             <>
@@ -726,14 +727,9 @@ function ResultCard({
 
   const isClickable = !!(item.backendMaterial || item.supabaseMaterial)
 
-  const handleClick = () => {
-    if (item.backendMaterial) {
-      onView?.()
-    } else if (item.supabaseMaterial) {
-      const url =
-        item.supabaseMaterial.file_url || item.supabaseMaterial.external_url
-      if (url) window.open(url, "_blank", "noopener,noreferrer")
-    }
+  const handleView = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onView?.()
   }
 
   const handleDownload = (e: React.MouseEvent) => {
@@ -743,7 +739,16 @@ function ResultCard({
     } else if (item.supabaseMaterial) {
       const url =
         item.supabaseMaterial.file_url || item.supabaseMaterial.external_url
-      if (url) window.open(url, "_blank", "noopener,noreferrer")
+      if (url) {
+        const a = document.createElement("a")
+        a.href = url
+        a.download = item.title.replace(/[^a-zA-Z0-9._-]/g, "_") || "download"
+        a.target = "_blank"
+        a.rel = "noopener noreferrer"
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
     }
   }
 
@@ -751,7 +756,7 @@ function ResultCard({
     <div
       className={`glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm ${isClickable ? "cursor-pointer" : ""
         }`}
-      onClick={handleClick}
+      onClick={handleView}
     >
       <div
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
@@ -765,6 +770,11 @@ function ResultCard({
         <p className="mt-0.5 text-xs text-muted-foreground">
           {item.author} &middot; {item.subject}
         </p>
+        {item.supabaseMaterial?.description && (
+          <p className="mt-0.5 text-[11px] text-muted-foreground/70 line-clamp-1">
+            {item.supabaseMaterial.description}
+          </p>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
@@ -797,16 +807,28 @@ function ResultCard({
           </div>
         </div>
       </div>
+      {/* View & Download buttons — always visible for real materials */}
       {isClickable ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={handleDownload}
-        >
-          <Download className="h-3.5 w-3.5" />
-          <span className="sr-only">Download</span>
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+            onClick={handleView}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            View
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+            onClick={handleDownload}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </Button>
+        </div>
       ) : (
         <div className="shrink-0 w-8" />
       )}
@@ -831,6 +853,7 @@ export function SearchResults({
   const [bestSubject, setBestSubject] = useState<BackendSubject | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
+  const [viewerSupabaseMaterial, setViewerSupabaseMaterial] = useState<SupabaseMaterial | null>(null)
 
   // Fetch materials from all subjects + Supabase faculty uploads and build result list
   const fetchAndScoreResults = useCallback(async () => {
@@ -1090,10 +1113,16 @@ export function SearchResults({
         <div className="flex flex-col gap-3">
           {filtered.map((item, i) => (
             <ResultCard
-              key={item.backendMaterial?.id ?? `static-${i}`}
+              key={item.backendMaterial?.id ?? item.supabaseMaterial?.id ?? `static-${i}`}
               item={item}
               onView={() => {
-                if (item.backendMaterial) setViewerMaterial(item.backendMaterial)
+                if (item.backendMaterial) {
+                  setViewerMaterial(item.backendMaterial)
+                  setViewerSupabaseMaterial(null)
+                } else if (item.supabaseMaterial) {
+                  setViewerSupabaseMaterial(item.supabaseMaterial)
+                  setViewerMaterial(null)
+                }
               }}
             />
           ))}
@@ -1122,8 +1151,12 @@ export function SearchResults({
       {/* Material viewer dialog */}
       <MaterialViewer
         material={viewerMaterial}
-        open={!!viewerMaterial}
-        onClose={() => setViewerMaterial(null)}
+        supabaseMaterial={viewerSupabaseMaterial}
+        open={!!viewerMaterial || !!viewerSupabaseMaterial}
+        onClose={() => {
+          setViewerMaterial(null)
+          setViewerSupabaseMaterial(null)
+        }}
       />
     </section>
   )
