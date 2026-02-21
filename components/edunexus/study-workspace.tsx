@@ -521,6 +521,7 @@ function getYouTubeId(url?: string): string | null {
 
 function VideoPlayer({
   currentTime,
+  duration,
   isPlaying,
   isMuted,
   onPlayPause,
@@ -532,6 +533,7 @@ function VideoPlayer({
   videoUrl,
 }: {
   currentTime: number
+  duration: number
   isPlaying: boolean
   isMuted: boolean
   onPlayPause: () => void
@@ -554,10 +556,10 @@ function VideoPlayer({
     if (videoRef.current) {
       videoRef.current.currentTime = pct * videoRef.current.duration
     }
-    onSeek(pct * TOTAL_DURATION)
+    onSeek(pct * duration)
   }
 
-  const progress = (currentTime / TOTAL_DURATION) * 100
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-xl border border-border bg-card">
@@ -578,9 +580,9 @@ function VideoPlayer({
           <video
             ref={videoRef}
             src={videoUrl}
-            controls
             className="absolute inset-0 w-full h-full object-contain bg-black"
             muted={isMuted}
+            autoPlay={isPlaying}
           />
         )}
 
@@ -630,7 +632,7 @@ function VideoPlayer({
             role="slider"
             aria-label="Seek"
             aria-valuemin={0}
-            aria-valuemax={TOTAL_DURATION}
+            aria-valuemax={duration}
             aria-valuenow={Math.floor(currentTime)}
           >
             <div className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all group-hover:h-2 group-hover:-top-[1px]" style={{ width: `${progress}%` }} />
@@ -646,7 +648,7 @@ function VideoPlayer({
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={onMute} aria-label={isMuted ? "Unmute" : "Mute"}>
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </Button>
-              <span className="ml-2 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)} / {formatTime(TOTAL_DURATION)}</span>
+              <span className="ml-2 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)} / {formatTime(duration)}</span>
             </div>
             <div className="flex items-center gap-1">
               <button className="rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors">1x</button>
@@ -730,8 +732,6 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
     } finally {
       if (isMounted) setLoading(false)
     }
-
-    return () => { isMounted = false }
   }
 
   // effect removed as logic is now in handleGenerateTranscript
@@ -1076,7 +1076,8 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
-          if (prev >= TOTAL_DURATION) { setIsPlaying(false); return TOTAL_DURATION }
+          const dur = selectedLecture?.durationSeconds || TOTAL_DURATION
+          if (prev >= dur) { setIsPlaying(false); return dur }
           return prev + 1
         })
       }, 1000)
@@ -1084,15 +1085,17 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [isPlaying])
+  }, [isPlaying, selectedLecture])
 
   const handleSeek = useCallback((time: number) => {
-    setCurrentTime(Math.max(0, Math.min(TOTAL_DURATION, time)))
-  }, [])
+    const dur = selectedLecture?.durationSeconds || TOTAL_DURATION
+    setCurrentTime(Math.max(0, Math.min(dur, time)))
+  }, [selectedLecture])
 
   const handleSkip = useCallback((delta: number) => {
-    setCurrentTime((prev) => Math.max(0, Math.min(TOTAL_DURATION, prev + delta)))
-  }, [])
+    const dur = selectedLecture?.durationSeconds || TOTAL_DURATION
+    setCurrentTime((prev) => Math.max(0, Math.min(dur, prev + delta)))
+  }, [selectedLecture])
 
   const handleSelectVideo = (id: string) => {
     setSelectedVideo(id)
@@ -1160,6 +1163,7 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
               <div className="flex h-full flex-col overflow-y-auto p-4 bg-background">
                 <VideoPlayer
                   currentTime={currentTime}
+                  duration={selectedLecture?.durationSeconds || TOTAL_DURATION}
                   isPlaying={isPlaying}
                   isMuted={isMuted}
                   onPlayPause={() => setIsPlaying((p) => !p)}
