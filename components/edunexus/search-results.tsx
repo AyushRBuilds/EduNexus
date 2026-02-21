@@ -26,6 +26,7 @@ import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { queryGeminiWithDocuments } from "@/lib/api/gemini.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
+import { getTopicDocuments, getTopicDefinition, type TopicDocument } from "@/lib/api/topic-documents"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
 
 /* ---------- Supabase material type ---------- */
@@ -278,6 +279,24 @@ function AISynthesisCard({
   const [fallbackError, setFallbackError] = useState(false)
   const [scholarLink, setScholarLink] = useState<string | null>(null)
 
+  // Topic-specific hardcoded documents
+  const [topicDocuments, setTopicDocuments] = useState<TopicDocument[]>([])
+  const [topicDefinition, setTopicDefinition] = useState<string | null>(null)
+
+  // 0. Get hardcoded topic documents whenever query changes
+  useEffect(() => {
+    if (!query) {
+      setTopicDocuments([])
+      setTopicDefinition(null)
+      return
+    }
+
+    const docs = getTopicDocuments(query)
+    const definition = getTopicDefinition(query)
+    setTopicDocuments(docs)
+    setTopicDefinition(definition)
+  }, [query])
+
   // 1. Call Gemini with document context (primary) whenever query changes
   useEffect(() => {
     if (!query) return
@@ -495,6 +514,87 @@ function AISynthesisCard({
             <p className="text-muted-foreground italic">
               No AI explanation available for this query. Try searching with a more specific topic.
             </p>
+          </div>
+        )}
+
+        {/* Topic-Specific Hardcoded Documents Section */}
+        {topicDocuments.length > 0 && (
+          <div className="border-t border-border pt-4 mt-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                <BookOpen className="h-3.5 w-3.5" />
+                Top Resources on {query}
+              </h4>
+              <div className="space-y-2">
+                {topicDocuments.slice(0, 5).map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-start gap-3 rounded-lg border border-border/50 bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
+                  >
+                    {/* Type Icon */}
+                    <div className="pt-0.5">
+                      {doc.type === "research_paper" && (
+                        <FileText className="h-4 w-4 text-blue-400" />
+                      )}
+                      {doc.type === "video_lecture" && (
+                        <Video className="h-4 w-4 text-red-400" />
+                      )}
+                      {doc.type === "presentation" && (
+                        <Presentation className="h-4 w-4 text-orange-400" />
+                      )}
+                      {doc.type === "notes" && (
+                        <BookOpen className="h-4 w-4 text-green-400" />
+                      )}
+                      {doc.type === "book" && (
+                        <FileText className="h-4 w-4 text-purple-400" />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground line-clamp-2">
+                        {doc.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        by {doc.author} • {doc.department}
+                      </p>
+                      <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-1">
+                        {doc.description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {doc.fileSize && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.fileSize}
+                          </Badge>
+                        )}
+                        {doc.duration && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.duration}
+                          </Badge>
+                        )}
+                        {doc.pages && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.pages}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] py-0">
+                          {Math.round(doc.relevanceScore)}% match
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Download Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
