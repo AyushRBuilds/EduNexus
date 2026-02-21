@@ -7,7 +7,7 @@
 
 <!-- Replace the image below with your homepage screenshot -->
 <p align="center">
-  <img src="YOUR_HOMEPAGE_IMAGE_LINK_HERE" alt="EduNexus Homepage" width="900"/>
+  <img src="https://github.com/AyushRBuilds/EduNexus/blob/e4d4a859ffbc6fccbe0008bebb19647431e1b13e/Screenshot%202026-02-21%20190628.png" alt="EduNexus Homepage" width="900"/>
 </p>
 
 > 📌 Upload your homepage screenshot to the repo (e.g., `/public/homepage.png`)  
