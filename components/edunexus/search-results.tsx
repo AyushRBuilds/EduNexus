@@ -64,13 +64,13 @@ function scoreRelevance(material: BackendMaterial, query: string): number {
   const desc = (material.description || "").toLowerCase()
   const content = (material.content || "").toLowerCase()
   const subject = (material.subject?.name || "").toLowerCase()
-  const filePath = (material.filePath || "").toLowerCase()
+  const type = (material.type || "").toLowerCase()
 
   // Full query match (highest weight)
   if (desc.includes(q)) score += 40
   if (content.includes(q)) score += 30
   if (subject.includes(q)) score += 25
-  if (filePath.includes(q)) score += 15
+  if (type.includes(q)) score += 15
 
   // Per-token matching
   for (const token of tokens) {
@@ -78,7 +78,7 @@ function scoreRelevance(material: BackendMaterial, query: string): number {
     if (desc.includes(token)) score += 12
     if (content.includes(token)) score += 8
     if (subject.includes(token)) score += 6
-    if (filePath.includes(token)) score += 4
+    if (type.includes(token)) score += 4
   }
 
   // Normalize to 0-100
@@ -288,13 +288,13 @@ function AISynthesisCard({
     setGeminiSources([])
 
     // Build document context from relevant materials
-    const relevantDocs = supabaseMaterials
-      .filter((m) => scoreSupabaseMaterial(m, query) > 30)
+    const relevantDocs = materials
+      .filter((m) => scoreRelevance(m, query) > 30)
       .slice(0, 5)
       .map((m) => ({
-        title: m.title,
-        content: m.description || m.title,
-        source: m.file_url || m.external_url || m.title,
+        title: m.subject?.name || "Material",
+        content: m.description || m.content || "Material",
+        source: m.filePath || "Material",
       }))
 
     queryGeminiWithDocuments(query, relevantDocs)
@@ -310,7 +310,7 @@ function AISynthesisCard({
         setGeminiError(true)
       })
       .finally(() => setGeminiLoading(false))
-  }, [query, supabaseMaterials])
+  }, [query, materials])
 
   // 2. Call n8n workflow as fallback
   useEffect(() => {
@@ -438,8 +438,8 @@ function AISynthesisCard({
                 </h4>
                 <div className="space-y-2">
                   {geminiSources.map((source, idx) => {
-                    const material = supabaseMaterials.find(
-                      (m) => m.file_url === source || m.external_url === source || m.title === source
+                    const material = materials.find(
+                      (m) => m.filePath === source || m.subject?.name === source
                     )
                     return (
                       <div
@@ -449,15 +449,15 @@ function AISynthesisCard({
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">
-                            {material?.title || source}
+                            {material?.subject?.name || source}
                           </p>
                           {material && (
                             <p className="text-[11px] text-muted-foreground">
-                              by {material.faculty_name || "Faculty"} • {material.subject}
+                              {material.type} • {material.description?.substring(0, 40)}
                             </p>
                           )}
                         </div>
-                        {material?.file_url && (
+                        {material?.filePath && (
                           <Button
                             size="sm"
                             variant="ghost"
