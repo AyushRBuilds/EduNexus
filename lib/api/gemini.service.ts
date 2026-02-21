@@ -135,20 +135,21 @@ export async function queryGeminiWithDocuments(
           .join('\n\n')
     }
 
-    let prompt = `You are an expert educational assistant with access to course materials. 
-Provide a comprehensive answer based on the question and the provided document context.
+    let prompt = `You are an expert educational assistant for a college/university knowledge system called EduNexus.
+You have access to materials uploaded by faculty to the college's institutional repository.
 
 Question: ${query}
 
 ${contextStr}
 
 Guidelines:
-- Base your answer on the provided documents when relevant
-- Be clear and detailed
-- Use examples where appropriate
-- Reference the documents when applicable
-- Keep technical accuracy
-- Be concise but thorough`
+- Base your answer primarily on the provided college repository documents
+- Clearly reference which documents you are drawing from (e.g., "According to [Document Title]...")
+- Provide a well-structured overview of the topic as covered in the college materials
+- If the documents only partially cover the topic, mention what is covered and supplement with general knowledge
+- Be clear, detailed, and academically rigorous
+- Use examples from the provided materials where appropriate
+- At the end, briefly list the source documents you referenced`
 
     console.log('[v0] Querying Gemini with documents:', {
       query,
@@ -163,7 +164,7 @@ Guidelines:
         },
       ],
       generationConfig: {
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         temperature: 0.7,
       },
       safetySettings: [

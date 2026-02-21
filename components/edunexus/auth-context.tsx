@@ -46,6 +46,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // ---------- Mock / demo accounts that bypass Supabase ----------
 const DEMO_ACCOUNTS: Record<string, User> = {
+  "student@edunexus.com": {
+    id: "demo-student-001",
+    name: "Aarav Patel",
+    email: "student@edunexus.com",
+    role: "student",
+    department: "Computer Science",
+    avatar: "AP",
+    semester: 4,
+  },
   "faculty@edunexus.com": {
     id: "demo-faculty-001",
     name: "Dr. Sharma",
@@ -183,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: demoUser.email }),
-        }).catch(() => {/* backend may be cold-starting */})
+        }).catch(() => {/* backend may be cold-starting */ })
         return { success: true }
       }
       if (demoUser && password !== DEMO_PASSWORD) {

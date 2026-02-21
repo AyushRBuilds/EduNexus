@@ -17,6 +17,11 @@ import {
   Sparkles,
   Bot,
   Zap,
+  AlertTriangle,
+  FolderOpen,
+  GraduationCap,
+  CheckCircle2,
+  Upload,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -251,12 +256,14 @@ function AISynthesisCard({
   subjects,
   bestSubject,
   materialsLoading,
+  supabaseMaterials,
 }: {
   query: string
   materials: BackendMaterial[]
   subjects: BackendSubject[]
   bestSubject: BackendSubject | null
   materialsLoading: boolean
+  supabaseMaterials: SupabaseMaterial[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
@@ -278,24 +285,52 @@ function AISynthesisCard({
   const [fallbackError, setFallbackError] = useState(false)
   const [scholarLink, setScholarLink] = useState<string | null>(null)
 
+  // Compute repository source counts
+  const repoSupabaseDocs = (supabaseMaterials || []).filter((m) => scoreSupabaseMaterial(m, query) > 20)
+  const repoBackendDocs = (materials || []).filter((m) => scoreRelevance(m, query) > 20)
+  const totalRepoSources = repoSupabaseDocs.length + repoBackendDocs.length
+  const hasRepoSources = totalRepoSources > 0
+
   // 1. Call Gemini with document context (primary) whenever query changes
   useEffect(() => {
     if (!query) return
+
+    // Build document context from faculty uploads (Supabase)
+    const supabaseDocs = (supabaseMaterials || [])
+      .filter((m) => scoreSupabaseMaterial(m, query) > 20)
+      .slice(0, 5)
+      .map((m) => ({
+        title: m.title,
+        content: [m.description, m.subject, (m.tags || []).join(", ")].filter(Boolean).join(" — "),
+        source: m.file_url || m.external_url || m.title,
+      }))
+
+    // Build document context from backend materials
+    const backendDocs = (materials || [])
+      .filter((m) => scoreRelevance(m, query) > 20)
+      .slice(0, 5)
+      .map((m) => ({
+        title: m.description || m.filePath || "Untitled",
+        content: [m.content, m.description, m.subject?.name].filter(Boolean).join(" — "),
+        source: m.filePath || m.description || m.subject?.name || "College Repository",
+      }))
+
+    // Merge both sources — Supabase first (faculty uploads), then backend
+    const relevantDocs = [...supabaseDocs, ...backendDocs].slice(0, 8)
+
+    // If no repo sources, skip Gemini call — show 'no sources' state
+    if (relevantDocs.length === 0) {
+      setGeminiLoading(false)
+      setGeminiError(false)
+      setGeminiAnswer(null)
+      setGeminiSources([])
+      return
+    }
 
     setGeminiLoading(true)
     setGeminiError(false)
     setGeminiAnswer(null)
     setGeminiSources([])
-
-    // Build document context from relevant materials
-    const relevantDocs = supabaseMaterials
-      .filter((m) => scoreSupabaseMaterial(m, query) > 30)
-      .slice(0, 5)
-      .map((m) => ({
-        title: m.title,
-        content: m.description || m.title,
-        source: m.file_url || m.external_url || m.title,
-      }))
 
     queryGeminiWithDocuments(query, relevantDocs)
       .then((res) => {
@@ -310,7 +345,7 @@ function AISynthesisCard({
         setGeminiError(true)
       })
       .finally(() => setGeminiLoading(false))
-  }, [query, supabaseMaterials])
+  }, [query, supabaseMaterials, materials])
 
   // 2. Call n8n workflow as fallback
   useEffect(() => {
@@ -385,24 +420,56 @@ function AISynthesisCard({
               AI Knowledge Synthesis
             </h2>
             <p className="text-xs text-muted-foreground">
-              {materials.length > 0
-                ? `Analyzing ${materials.length} source${materials.length !== 1 ? "s" : ""} from ${relatedSubjects.length} subject${relatedSubjects.length !== 1 ? "s" : ""} via n8n workflow + faculty uploads`
-                : "Querying n8n workflow + faculty uploads..."}
+              Searching your college repository for relevant materials
             </p>
           </div>
         </div>
       </div>
 
-      {/* AI-generated explanation (n8n primary, backend fallback) */}
+      {/* Repository source status banner */}
+      {!materialsLoading && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 flex items-center gap-3 ${hasRepoSources
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-amber-500/30 bg-amber-500/5"
+          }`}>
+          {hasRepoSources ? (
+            <>
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-emerald-300">
+                  Found {totalRepoSources} source{totalRepoSources !== 1 ? "s" : ""} in College Repository
+                </p>
+                <p className="text-[11px] text-emerald-400/70">
+                  {repoSupabaseDocs.length > 0 && `${repoSupabaseDocs.length} faculty upload${repoSupabaseDocs.length !== 1 ? "s" : ""}`}
+                  {repoSupabaseDocs.length > 0 && repoBackendDocs.length > 0 && " · "}
+                  {repoBackendDocs.length > 0 && `${repoBackendDocs.length} backend material${repoBackendDocs.length !== 1 ? "s" : ""}`}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-300">
+                  No sources found in College Repository
+                </p>
+                <p className="text-[11px] text-amber-400/70">
+                  No faculty-uploaded materials match &ldquo;{query}&rdquo; — ask faculty to upload resources via Faculty Studio
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* AI-generated explanation */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
         {(aiLoading || materialsLoading) && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4 animate-pulse text-primary" />
               <span className="text-xs">
-                {n8nLoading
-                  ? "Querying n8n workflow for AI explanation..."
-                  : "AI is analyzing your query across institutional knowledge..."}
+                AI is analyzing your query across the college repository...
               </span>
             </div>
             <div className="space-y-2">
@@ -413,15 +480,30 @@ function AISynthesisCard({
           </div>
         )}
 
-        {!aiLoading && !materialsLoading && aiAnswer && (
+        {/* NO SOURCES state — clear message for demo */}
+        {!aiLoading && !materialsLoading && !hasRepoSources && (
+          <div className="text-center py-4">
+            <FolderOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+            <h3 className="text-sm font-medium text-muted-foreground mb-1">
+              No materials available for AI synthesis
+            </h3>
+            <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
+              The college repository doesn&rsquo;t have any documents on &ldquo;{query}&rdquo; yet.
+              Faculty can upload study materials, notes, and links via <span className="text-primary font-medium">Faculty Studio</span> to make them available here.
+            </p>
+          </div>
+        )}
+
+        {/* HAS SOURCES + AI answer */}
+        {!aiLoading && !materialsLoading && hasRepoSources && aiAnswer && (
           <div className="space-y-4">
             <div>
               <div className="mb-1.5 flex items-center gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  AI Explanation
+                  AI Overview — Based on College Repository
                 </h3>
                 {answerSource && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
                     <Zap className="h-2.5 w-2.5" />
                     {answerSource}
                   </span>
@@ -434,7 +516,7 @@ function AISynthesisCard({
             {geminiAnswer && geminiSources.length > 0 && (
               <div className="border-t border-border pt-4">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Based on Uploaded Materials
+                  Sources from College Repository
                 </h4>
                 <div className="space-y-2">
                   {geminiSources.map((source, idx) => {
@@ -444,16 +526,16 @@ function AISynthesisCard({
                     return (
                       <div
                         key={idx}
-                        className="flex items-start gap-2 rounded-lg border border-border/50 bg-secondary/30 px-3 py-2"
+                        className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2"
                       >
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+                        <FileText className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">
                             {material?.title || source}
                           </p>
                           {material && (
                             <p className="text-[11px] text-muted-foreground">
-                              by {material.faculty_name || "Faculty"} • {material.subject}
+                              Uploaded by {material.faculty_name || "Faculty"} • {material.subject}
                             </p>
                           )}
                         </div>
@@ -462,7 +544,7 @@ function AISynthesisCard({
                             size="sm"
                             variant="ghost"
                             className="shrink-0 h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => downloadMaterial(material)}
+                            onClick={() => window.open(material.file_url!, "_blank", "noopener,noreferrer")}
                           >
                             <Download className="h-3.5 w-3.5" />
                           </Button>
@@ -473,27 +555,59 @@ function AISynthesisCard({
                 </div>
               </div>
             )}
+
+            {/* Show matched Supabase materials as sources even if Gemini didn't cite them */}
+            {repoSupabaseDocs.length > 0 && (
+              <div className="border-t border-border pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Upload className="h-3 w-3" />
+                  Faculty Uploaded Materials
+                </h4>
+                <div className="space-y-2">
+                  {repoSupabaseDocs.slice(0, 5).map((mat) => (
+                    <div
+                      key={mat.id}
+                      className="group flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-2.5 hover:border-emerald-500/20 transition-all cursor-pointer"
+                      onClick={() => {
+                        const url = mat.file_url || mat.external_url
+                        if (url) window.open(url, "_blank", "noopener,noreferrer")
+                      }}
+                    >
+                      <GraduationCap className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">
+                          {mat.title}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {mat.faculty_name || "Faculty"} • {mat.subject} • {mat.type}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]">
+                        Faculty Upload
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {!aiLoading && !materialsLoading && aiError && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Explanation
-            </h3>
-            <p className="text-muted-foreground italic">
-              AI synthesis is currently unavailable. Showing matched materials from your institutional repository below.
-            </p>
+        {/* HAS SOURCES but Gemini is loading */}
+        {!aiLoading && !materialsLoading && hasRepoSources && !aiAnswer && !aiError && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Sparkles className="h-4 w-4 animate-pulse text-primary" />
+            <span className="text-xs">Preparing AI overview from repository sources...</span>
           </div>
         )}
 
-        {!aiLoading && !materialsLoading && !aiAnswer && !aiError && (
+        {!aiLoading && !materialsLoading && hasRepoSources && aiError && (
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Explanation
+              AI Overview
             </h3>
             <p className="text-muted-foreground italic">
-              No AI explanation available for this query. Try searching with a more specific topic.
+              AI synthesis is temporarily unavailable. Repository sources are listed above.
             </p>
           </div>
         )}
@@ -538,11 +652,11 @@ function AISynthesisCard({
               </div>
             )}
 
-            {/* Citations from real materials */}
+            {/* Citations from backend materials */}
             {topMaterials.length > 0 && (
               <div>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Sources
+                  Backend Sources
                 </h3>
                 <div className="flex flex-col gap-1.5">
                   {topMaterials.slice(0, 4).map((m) => (
@@ -564,77 +678,29 @@ function AISynthesisCard({
         )}
       </div>
 
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="mt-4 flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
-      >
-        {expanded ? (
-          <>
-            Show less <ChevronUp className="h-3.5 w-3.5" />
-          </>
-        ) : (
-          <>
-            Show more details <ChevronDown className="h-3.5 w-3.5" />
-          </>
-        )}
-      </button>
-
-      {/* Repository materials section */}
-      {!materialsLoading && topMaterials.length > 0 && (
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              From Your College Repository
-            </h3>
-            <button
-              onClick={() => downloadAllMaterials(topMaterials.slice(0, 3))}
-              className="flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              <Download className="h-3 w-3" />
-              Download All
-            </button>
-          </div>
-          <div className="space-y-2">
-            {topMaterials.slice(0, 3).map((mat) => (
-              <div
-                key={mat.id}
-                className="group flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-3 hover:border-primary/20 transition-all cursor-pointer"
-                onClick={() => setViewerMaterial(mat)}
-              >
-                <FileText className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground">
-                    {mat.description || mat.filePath}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {mat.subject.name} &middot; {mat.type}
-                  </p>
-                  {mat.content && (
-                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
-                      {mat.content}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    downloadMaterial(mat)
-                  }}
-                  className="shrink-0 h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all"
-                  title="Download"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {(hasRepoSources || topMaterials.length > 0) && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-4 flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+        >
+          {expanded ? (
+            <>
+              Show less <ChevronUp className="h-3.5 w-3.5" />
+            </>
+          ) : (
+            <>
+              Show more details <ChevronDown className="h-3.5 w-3.5" />
+            </>
+          )}
+        </button>
       )}
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        {answerSource
-          ? `Powered by ${answerSource} — ${materials.length} source${materials.length !== 1 ? "s" : ""} analyzed`
-          : "Querying n8n workflow..."}
+        {hasRepoSources && answerSource
+          ? `Powered by ${answerSource} — ${totalRepoSources} college repository source${totalRepoSources !== 1 ? "s" : ""} analyzed`
+          : !hasRepoSources && !materialsLoading
+            ? "No college repository sources available for this topic"
+            : "Searching college repository..."}
       </p>
 
       {/* In-app material viewer */}
@@ -683,9 +749,8 @@ function ResultCard({
 
   return (
     <div
-      className={`glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm ${
-        isClickable ? "cursor-pointer" : ""
-      }`}
+      className={`glass group flex items-start gap-4 rounded-xl p-4 transition-all hover:border-primary/30 hover:glow-sm ${isClickable ? "cursor-pointer" : ""
+        }`}
       onClick={handleClick}
     >
       <div
@@ -761,6 +826,7 @@ export function SearchResults({
   const [filter, setFilter] = useState<ContentFilter>(initialFilter || "all")
   const [results, setResults] = useState<ResultItem[]>([])
   const [allMaterials, setAllMaterials] = useState<BackendMaterial[]>([])
+  const [allSupabaseMaterials, setAllSupabaseMaterials] = useState<SupabaseMaterial[]>([])
   const [subjects, setSubjects] = useState<BackendSubject[]>([])
   const [bestSubject, setBestSubject] = useState<BackendSubject | null>(null)
   const [loading, setLoading] = useState(true)
@@ -780,6 +846,9 @@ export function SearchResults({
         if (supaRes.ok) {
           const supaData = await supaRes.json()
           const supaMaterials: SupabaseMaterial[] = supaData.materials || []
+
+          // Store all Supabase materials for AI synthesis
+          setAllSupabaseMaterials(supaMaterials)
 
           supabaseResults = supaMaterials
             .map((mat) => ({
@@ -896,11 +965,8 @@ export function SearchResults({
       // ----- 3. Merge all sources -----
       let combined = [...supabaseResults, ...backendResults]
 
-      // Add static fallbacks if fewer than 3 real results
-      if (combined.length < 3) {
-        const staticToAdd = STATIC_RESULTS.slice(0, 5 - combined.length)
-        combined = [...combined, ...staticToAdd]
-      }
+      // No static fallbacks — show only real results from college repository
+      // This makes the "empty → upload → found" demo flow clear for judges
 
       // Deduplicate by title (prefer Supabase / backend over static)
       const seen = new Set<string>()
@@ -969,6 +1035,7 @@ export function SearchResults({
         subjects={subjects}
         bestSubject={bestSubject}
         materialsLoading={loading}
+        supabaseMaterials={allSupabaseMaterials}
       />
 
       {/* Filter Bar */}
@@ -982,20 +1049,18 @@ export function SearchResults({
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
-                isActive
-                  ? "bg-primary/15 text-primary border border-primary/30"
-                  : "bg-secondary/30 text-muted-foreground border border-transparent hover:bg-secondary/50 hover:text-foreground"
-              }`}
+              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${isActive
+                ? "bg-primary/15 text-primary border border-primary/30"
+                : "bg-secondary/30 text-muted-foreground border border-transparent hover:bg-secondary/50 hover:text-foreground"
+                }`}
             >
               <Icon className="h-3.5 w-3.5" />
               {f.label}
               <span
-                className={`ml-0.5 text-[10px] ${
-                  isActive
-                    ? "text-primary/70"
-                    : "text-muted-foreground/60"
-                }`}
+                className={`ml-0.5 text-[10px] ${isActive
+                  ? "text-primary/70"
+                  : "text-muted-foreground/60"
+                  }`}
               >
                 ({count})
               </span>
@@ -1037,9 +1102,19 @@ export function SearchResults({
 
       {!loading && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Filter className="h-8 w-8 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">
-            No results found for this filter
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+            <FolderOpen className="h-8 w-8 text-amber-400/60" />
+          </div>
+          <h3 className="text-base font-medium text-foreground mb-1">
+            No materials in college repository
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            There are no faculty-uploaded resources matching &ldquo;{query}&rdquo; in the college repository yet.
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-2 max-w-sm">
+            Faculty members can upload documents, links, and videos through{" "}
+            <span className="text-primary font-medium">Faculty Studio</span>{" "}
+            to make them searchable here.
           </p>
         </div>
       )}

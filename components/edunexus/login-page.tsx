@@ -362,7 +362,24 @@ export function LoginPage() {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    setError("")
+                    setLoading(true)
+                    const result = await login("student@edunexus.com", "demo123")
+                    if (!result.success) setError(result.error || "Login failed")
+                    setLoading(false)
+                  }}
+                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span className="w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-[10px] font-bold">
+                    S
+                  </span>
+                  Student
+                </button>
                 <button
                   type="button"
                   disabled={loading}
@@ -373,12 +390,12 @@ export function LoginPage() {
                     if (!result.success) setError(result.error || "Login failed")
                     setLoading(false)
                   }}
-                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-1.5"
                 >
                   <span className="w-6 h-6 rounded-md bg-accent/15 text-accent flex items-center justify-center text-[10px] font-bold">
                     F
                   </span>
-                  Faculty Demo
+                  Faculty
                 </button>
                 <button
                   type="button"
@@ -390,12 +407,12 @@ export function LoginPage() {
                     if (!result.success) setError(result.error || "Login failed")
                     setLoading(false)
                   }}
-                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                  className="h-10 rounded-xl border border-border bg-secondary/50 text-sm font-medium text-foreground hover:bg-secondary transition-colors flex items-center justify-center gap-1.5"
                 >
                   <span className="w-6 h-6 rounded-md bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold">
                     A
                   </span>
-                  Admin Demo
+                  Admin
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground text-center mt-2">
