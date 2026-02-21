@@ -32,11 +32,12 @@ const sidebarItems: SidebarItem[] = [
   { icon: Library, label: "Subjects", id: "subjects", roles: ["student", "faculty", "admin"], color: "text-lime-400" },
   { icon: MonitorPlay, label: "Study Mode", id: "study", roles: ["student"], color: "text-cyan-400" },
   { icon: TrendingUp, label: "Trending", id: "trending", roles: ["student", "faculty", "admin"], color: "text-yellow-400" },
+  { icon: GraduationCap, label: "Student Demo", id: "demo", roles: ["student"], color: "text-violet-400" },
   { icon: GraduationCap, label: "Faculty Studio", id: "faculty", roles: ["faculty", "admin"], color: "text-indigo-400" },
   { icon: LayoutDashboard, label: "Admin Panel", id: "admin", roles: ["admin"], color: "text-amber-400" },
 ]
 
-export type ViewId = "search" | "research" | "collab" | "subjects" | "study" | "trending" | "faculty" | "admin"
+export type ViewId = "search" | "research" | "collab" | "subjects" | "study" | "trending" | "demo" | "faculty" | "admin"
 
 export function AppSidebar({
   activeView,
