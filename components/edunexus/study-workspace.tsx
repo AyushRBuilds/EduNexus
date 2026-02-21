@@ -25,6 +25,9 @@ import {
   Users,
   GraduationCap,
   X,
+  Sparkles,
+  Loader2,
+  Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -33,6 +36,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { Badge } from "@/components/ui/badge"
 import { StudyMindMap } from "./study-mind-map"
+import { queryGemini } from "@/lib/api/gemini.service"
 
 /* ------------------------------------------------------------------ */
 /*  Video Lecture Catalog Data                                         */
@@ -54,6 +58,8 @@ interface VideoLecture {
   totalLectures: number
   tags: string[]
   date: string
+  youtubeUrl?: string
+  videoUrl?: string
 }
 
 const VIDEO_CATALOG: VideoLecture[] = [
@@ -73,6 +79,7 @@ const VIDEO_CATALOG: VideoLecture[] = [
     totalLectures: 28,
     tags: ["Laplace", "Transforms", "s-domain"],
     date: "Feb 10, 2026",
+    youtubeUrl: "https://www.youtube.com/watch?v=n2y7n6jw5d0",
   },
   {
     id: "dsa-trees",
@@ -444,28 +451,36 @@ const AI_RESPONSES: Record<string, string> = {
 }
 
 const SUMMARY_SECTIONS = [
-  { title: "Core Definition", items: [
-    "L{f(t)} = F(s) = integral from 0 to infinity of e^(-st) f(t) dt",
-    "Converts time-domain functions to complex frequency-domain (s-domain)",
-    "s is a complex variable: s = sigma + j*omega",
-  ]},
-  { title: "Key Properties", items: [
-    "Linearity: L{af(t) + bg(t)} = aF(s) + bG(s)",
-    "Time-shifting: L{f(t-a)u(t-a)} = e^(-as)F(s)",
-    "Differentiation: L{f'(t)} = sF(s) - f(0)",
-    "Convolution: L{f*g(t)} = F(s)G(s)",
-  ]},
-  { title: "Applications Covered", items: [
-    "RLC circuit analysis using impedance in s-domain",
-    "Transfer function H(s) and pole analysis",
-    "Solving ordinary differential equations (ODEs)",
-    "Control system stability analysis",
-  ]},
-  { title: "Related Concepts", items: [
-    "Inverse Laplace via partial fraction decomposition",
-    "Connection to Fourier Transform (s = j*omega)",
-    "Z-Transform for discrete-time signals (next lecture)",
-  ]},
+  {
+    title: "Core Definition", items: [
+      "L{f(t)} = F(s) = integral from 0 to infinity of e^(-st) f(t) dt",
+      "Converts time-domain functions to complex frequency-domain (s-domain)",
+      "s is a complex variable: s = sigma + j*omega",
+    ]
+  },
+  {
+    title: "Key Properties", items: [
+      "Linearity: L{af(t) + bg(t)} = aF(s) + bG(s)",
+      "Time-shifting: L{f(t-a)u(t-a)} = e^(-as)F(s)",
+      "Differentiation: L{f'(t)} = sF(s) - f(0)",
+      "Convolution: L{f*g(t)} = F(s)G(s)",
+    ]
+  },
+  {
+    title: "Applications Covered", items: [
+      "RLC circuit analysis using impedance in s-domain",
+      "Transfer function H(s) and pole analysis",
+      "Solving ordinary differential equations (ODEs)",
+      "Control system stability analysis",
+    ]
+  },
+  {
+    title: "Related Concepts", items: [
+      "Inverse Laplace via partial fraction decomposition",
+      "Connection to Fourier Transform (s = j*omega)",
+      "Z-Transform for discrete-time signals (next lecture)",
+    ]
+  },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -476,6 +491,12 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+function getYouTubeId(url?: string): string | null {
+  if (!url) return null
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/)
+  return match ? match[1] : null
 }
 
 /* ------------------------------------------------------------------ */
@@ -491,6 +512,8 @@ function VideoPlayer({
   onSeek,
   onSkip,
   lectureTitle,
+  youtubeUrl,
+  videoUrl,
 }: {
   currentTime: number
   isPlaying: boolean
@@ -500,13 +523,21 @@ function VideoPlayer({
   onSeek: (time: number) => void
   onSkip: (delta: number) => void
   lectureTitle?: string
+  youtubeUrl?: string
+  videoUrl?: string
 }) {
   const progressRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const ytId = getYouTubeId(youtubeUrl)
+  const hasRealVideo = !!(ytId || videoUrl)
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current) return
     const rect = progressRef.current.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    if (videoRef.current) {
+      videoRef.current.currentTime = pct * videoRef.current.duration
+    }
     onSeek(pct * TOTAL_DURATION)
   }
 
@@ -515,104 +546,99 @@ function VideoPlayer({
   return (
     <div className="relative flex flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="relative aspect-video w-full overflow-hidden bg-[#0a0e1a]">
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="absolute inset-4 rounded-lg border border-border/30 bg-[#0c1220]">
-            <div className="absolute inset-0 opacity-[0.04]" style={{
-              backgroundImage: "linear-gradient(rgba(56,189,248,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.5) 1px, transparent 1px)",
-              backgroundSize: "40px 40px",
-            }} />
-            <div className="relative flex h-full flex-col items-center justify-center gap-6 p-8">
-              <div className="flex items-center gap-3 text-primary/70">
-                <BookOpen className="h-5 w-5" />
-                <span className="text-xs font-medium uppercase tracking-widest">EE301 - Signals & Systems</span>
-              </div>
-              <h2 className="text-center text-2xl font-bold text-foreground lg:text-3xl text-balance">
-                {lectureTitle || "Laplace Transform"}
-              </h2>
-              <div className="flex flex-col items-center gap-2">
-                <p className="font-mono text-sm text-primary lg:text-base">{'L{f(t)} = F(s) = '}</p>
-                <p className="font-mono text-sm text-primary lg:text-base">{'integral(0, inf) e^(-st) f(t) dt'}</p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-3">
-                {[
-                  { label: "Linearity", active: currentTime >= 55 },
-                  { label: "Time-Shift", active: currentTime >= 75 },
-                  { label: "Differentiation", active: currentTime >= 95 },
-                  { label: "Convolution", active: currentTime >= 210 },
-                ].map((prop) => (
-                  <span
-                    key={prop.label}
-                    className={cn(
-                      "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-500",
-                      prop.active
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border/30 bg-secondary/20 text-muted-foreground/40"
-                    )}
-                  >
-                    {prop.label}
-                  </span>
-                ))}
-              </div>
-              <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">VM</div>
-                <div>
-                  <p className="text-xs font-medium text-foreground/80">Prof. Vikram Menon</p>
-                  <p className="text-[10px] text-muted-foreground">Dept. of Electrical Engineering</p>
+        {/* YouTube Embed */}
+        {ytId && (
+          <iframe
+            src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full"
+            title={lectureTitle || "Video"}
+          />
+        )}
+
+        {/* Direct video URL */}
+        {!ytId && videoUrl && (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            controls
+            className="absolute inset-0 w-full h-full object-contain bg-black"
+            muted={isMuted}
+          />
+        )}
+
+        {/* Fallback placeholder when no real video */}
+        {!hasRealVideo && (
+          <>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="absolute inset-4 rounded-lg border border-border/30 bg-[#0c1220]">
+                <div className="absolute inset-0 opacity-[0.04]" style={{
+                  backgroundImage: "linear-gradient(rgba(56,189,248,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.5) 1px, transparent 1px)",
+                  backgroundSize: "40px 40px",
+                }} />
+                <div className="relative flex h-full flex-col items-center justify-center gap-6 p-8">
+                  <div className="flex items-center gap-3 text-primary/70">
+                    <BookOpen className="h-5 w-5" />
+                    <span className="text-xs font-medium uppercase tracking-widest">Lecture Preview</span>
+                  </div>
+                  <h2 className="text-center text-2xl font-bold text-foreground lg:text-3xl text-balance">
+                    {lectureTitle || "Lecture"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">No video source available</p>
                 </div>
               </div>
-              <div className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-lg bg-secondary/40 px-2.5 py-1 text-[10px] text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Lecture 14 of 28
-              </div>
             </div>
-          </div>
-        </div>
-        <button
-          onClick={onPlayPause}
-          className="absolute inset-0 z-10 flex items-center justify-center bg-transparent transition-colors hover:bg-background/10"
-          aria-label={isPlaying ? "Pause" : "Play"}
-        >
-          {!isPlaying && (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30">
-              <Play className="ml-1 h-7 w-7" fill="currentColor" />
-            </div>
-          )}
-        </button>
+            <button
+              onClick={onPlayPause}
+              className="absolute inset-0 z-10 flex items-center justify-center bg-transparent transition-colors hover:bg-background/10"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {!isPlaying && (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30">
+                  <Play className="ml-1 h-7 w-7" fill="currentColor" />
+                </div>
+              )}
+            </button>
+          </>
+        )}
       </div>
 
-      <div className="flex flex-col gap-1.5 border-t border-border bg-card/80 px-3 py-2 backdrop-blur-sm">
-        <div
-          ref={progressRef}
-          className="group relative h-1.5 w-full cursor-pointer rounded-full bg-secondary"
-          onClick={handleProgressClick}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={TOTAL_DURATION}
-          aria-valuenow={Math.floor(currentTime)}
-        >
-          <div className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all group-hover:h-2 group-hover:-top-[1px]" style={{ width: `${progress}%` }} />
-          <div className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background shadow-sm opacity-0 transition-opacity group-hover:opacity-100" style={{ left: `calc(${progress}% - 7px)` }} />
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={() => onSkip(-10)} aria-label="Rewind 10s"><SkipBack className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-foreground hover:bg-secondary/60" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"}>
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" fill="currentColor" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={() => onSkip(10)} aria-label="Forward 10s"><SkipForward className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={onMute} aria-label={isMuted ? "Unmute" : "Mute"}>
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </Button>
-            <span className="ml-2 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)} / {formatTime(TOTAL_DURATION)}</span>
+      {/* Controls bar (only show for non-YouTube) */}
+      {!ytId && (
+        <div className="flex flex-col gap-1.5 border-t border-border bg-card/80 px-3 py-2 backdrop-blur-sm">
+          <div
+            ref={progressRef}
+            className="group relative h-1.5 w-full cursor-pointer rounded-full bg-secondary"
+            onClick={handleProgressClick}
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={TOTAL_DURATION}
+            aria-valuenow={Math.floor(currentTime)}
+          >
+            <div className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all group-hover:h-2 group-hover:-top-[1px]" style={{ width: `${progress}%` }} />
+            <div className="absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background shadow-sm opacity-0 transition-opacity group-hover:opacity-100" style={{ left: `calc(${progress}% - 7px)` }} />
           </div>
-          <div className="flex items-center gap-1">
-            <button className="rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors">1x</button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" aria-label="Settings"><Settings className="h-3.5 w-3.5" /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" aria-label="Fullscreen"><Maximize className="h-3.5 w-3.5" /></Button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={() => onSkip(-10)} aria-label="Rewind 10s"><SkipBack className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-foreground hover:bg-secondary/60" onClick={onPlayPause} aria-label={isPlaying ? "Pause" : "Play"}>
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" fill="currentColor" />}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={() => onSkip(10)} aria-label="Forward 10s"><SkipForward className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" onClick={onMute} aria-label={isMuted ? "Unmute" : "Mute"}>
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </Button>
+              <span className="ml-2 text-xs tabular-nums text-muted-foreground">{formatTime(currentTime)} / {formatTime(TOTAL_DURATION)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors">1x</button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/60" aria-label="Fullscreen"><Maximize className="h-3.5 w-3.5" /></Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -671,8 +697,10 @@ function TranscriptPanel({ currentTime, onSeek }: { currentTime: number; onSeek:
 /*  Chat Tab                                                           */
 /* ------------------------------------------------------------------ */
 
-function ChatTab() {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT)
+function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { id: 1, role: "ai", text: `Hi! I'm your AI study companion for this lecture${videoTitle ? ` on "${videoTitle}"` : ""}. Ask me anything about the concepts covered, request explanations, or I can quiz you on the material.` },
+  ])
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -681,25 +709,37 @@ function ChatTab() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages])
 
-  const handleSend = useCallback(() => {
-    if (!input.trim()) return
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isTyping) return
     const userMsg: ChatMessage = { id: Date.now(), role: "user", text: input.trim() }
     setMessages((prev) => [...prev, userMsg])
+    const question = input.trim()
     setInput("")
     setIsTyping(true)
 
-    const lower = input.toLowerCase()
-    let response = AI_RESPONSES.default
-    if (lower.includes("definition") || lower.includes("what is")) response = AI_RESPONSES.definition
-    else if (lower.includes("propert")) response = AI_RESPONSES.properties
-    else if (lower.includes("circuit") || lower.includes("rlc")) response = AI_RESPONSES.circuit
-    else if (lower.includes("inverse")) response = AI_RESPONSES.inverse
+    try {
+      const context = [
+        videoTitle ? `This is a lecture on: ${videoTitle}` : "",
+        videoSubject ? `Subject: ${videoSubject}` : "",
+        "Answer as a helpful tutor. Be concise but thorough. Use examples when helpful.",
+      ].filter(Boolean).join("\n")
 
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "ai", text: response }])
+      const result = await queryGemini(question, context)
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "ai",
+        text: result.answer || "I couldn't generate a response. Please try again.",
+      }])
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        role: "ai",
+        text: "Sorry, I encountered an error. Please check that the Gemini API key is configured and try again.",
+      }])
+    } finally {
       setIsTyping(false)
-    }, 1200)
-  }, [input])
+    }
+  }, [input, isTyping, videoTitle, videoSubject])
 
   return (
     <div className="flex h-full flex-col">
@@ -711,7 +751,12 @@ function ChatTab() {
                 "max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed",
                 msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-secondary/60 text-secondary-foreground rounded-bl-md"
               )}>
-                {msg.role === "ai" && <span className="mb-1 block text-[10px] font-semibold text-primary">EduNexus AI</span>}
+                {msg.role === "ai" && (
+                  <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-primary">
+                    <Bot className="h-3 w-3" />
+                    EduNexus AI
+                  </span>
+                )}
                 <p className="whitespace-pre-line">{msg.text}</p>
               </div>
             </div>
@@ -719,10 +764,9 @@ function ChatTab() {
           {isTyping && (
             <div className="flex justify-start">
               <div className="rounded-2xl bg-secondary/60 px-4 py-3 rounded-bl-md">
-                <div className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse" style={{ animationDelay: "0.2s" }} />
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse" style={{ animationDelay: "0.4s" }} />
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary animate-pulse" />
+                  <span className="text-[10px] text-muted-foreground">AI is thinking...</span>
                 </div>
               </div>
             </div>
@@ -739,12 +783,12 @@ function ChatTab() {
             placeholder="Ask about the lecture..."
             className="h-9 flex-1 rounded-xl border border-border bg-secondary/30 px-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all"
           />
-          <Button size="icon" className="h-9 w-9 shrink-0 rounded-xl" onClick={handleSend} disabled={!input.trim()}>
-            <Send className="h-3.5 w-3.5" />
+          <Button size="icon" className="h-9 w-9 shrink-0 rounded-xl" onClick={handleSend} disabled={!input.trim() || isTyping}>
+            {isTyping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             <span className="sr-only">Send message</span>
           </Button>
         </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground/50 text-center">AI responses are based on lecture content</p>
+        <p className="mt-1.5 text-[10px] text-muted-foreground/50 text-center">Powered by Gemini AI — answers based on lecture context</p>
       </div>
     </div>
   )
@@ -754,41 +798,106 @@ function ChatTab() {
 /*  Summary Tab                                                        */
 /* ------------------------------------------------------------------ */
 
-function SummaryTab() {
+function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string }) {
+  const [summary, setSummary] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [generated, setGenerated] = useState(false)
+
+  const generateSummary = useCallback(async () => {
+    if (!videoTitle) return
+    setLoading(true)
+    try {
+      const prompt = `Generate a comprehensive study summary for a lecture titled "${videoTitle}"${videoSubject ? ` (Subject: ${videoSubject})` : ""}.
+
+Format the summary as:
+1. **Key Concepts** - List the main concepts covered (4-6 bullet points)
+2. **Core Definitions** - Important definitions and formulas
+3. **Applications** - Real-world applications discussed
+4. **Study Tips** - 2-3 practical tips for studying this topic
+5. **Key Takeaways** - 3 most important things to remember
+
+Be academically rigorous and detailed. Use clear, student-friendly language.`
+
+      const result = await queryGemini(prompt)
+      setSummary(result.answer || "Could not generate summary.")
+      setGenerated(true)
+    } catch {
+      setSummary("Error generating summary. Please check that the Gemini API key is configured.")
+    } finally {
+      setLoading(false)
+    }
+  }, [videoTitle, videoSubject])
+
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-5 p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
-            <FileText className="h-3.5 w-3.5 text-primary" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Key Summary</h3>
+              <p className="text-[10px] text-muted-foreground">
+                {generated ? "AI-generated from lecture topic" : "Click generate to create summary"}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Lecture Summary</h3>
-            <p className="text-[10px] text-muted-foreground">Auto-generated from transcript</p>
-          </div>
+          <Button
+            size="sm"
+            onClick={generateSummary}
+            disabled={loading || !videoTitle}
+            className="h-8 rounded-lg gap-1.5 text-xs"
+          >
+            {loading ? (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</>
+            ) : (
+              <><Sparkles className="h-3 w-3" /> {generated ? "Regenerate" : "Generate Summary"}</>
+            )}
+          </Button>
         </div>
-        {SUMMARY_SECTIONS.map((section) => (
-          <div key={section.title} className="rounded-xl border border-border/60 bg-secondary/15 p-3.5">
-            <h4 className="mb-2.5 text-[10px] font-bold uppercase tracking-wider text-primary/80">{section.title}</h4>
-            <ul className="flex flex-col gap-2">
-              {section.items.map((item, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-xs text-secondary-foreground leading-relaxed">
-                  <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
-                  <span className="font-mono text-[11px]">{item}</span>
-                </li>
-              ))}
-            </ul>
+
+        {loading && (
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-border/60 bg-secondary/15 p-3.5">
+                <div className="h-3 w-24 animate-pulse rounded bg-secondary/50 mb-3" />
+                <div className="space-y-2">
+                  <div className="h-3 w-full animate-pulse rounded bg-secondary/40" />
+                  <div className="h-3 w-5/6 animate-pulse rounded bg-secondary/40" />
+                  <div className="h-3 w-4/6 animate-pulse rounded bg-secondary/40" />
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-        <div className="rounded-xl border border-border/40 bg-primary/5 p-3.5">
-          <div className="flex items-center gap-2 mb-2">
-            <Info className="h-3.5 w-3.5 text-primary/70" />
-            <span className="text-[10px] font-semibold text-primary/70">Study Tip</span>
+        )}
+
+        {!loading && summary && (
+          <div className="rounded-xl border border-border/60 bg-secondary/15 p-4">
+            <p className="whitespace-pre-line text-xs leading-relaxed text-secondary-foreground">{summary}</p>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Practice solving at least 3 ODE problems using Laplace Transforms before the next lecture. Focus on partial fraction decomposition for the inverse transform.
-          </p>
-        </div>
+        )}
+
+        {!loading && !summary && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Sparkles className="h-8 w-8 text-muted-foreground/20 mb-3" />
+            <p className="text-xs text-muted-foreground">
+              Click &ldquo;Generate Summary&rdquo; to create an AI-powered key summary of this lecture.
+            </p>
+          </div>
+        )}
+
+        {generated && (
+          <div className="rounded-xl border border-border/40 bg-primary/5 p-3.5">
+            <div className="flex items-center gap-2 mb-2">
+              <Info className="h-3.5 w-3.5 text-primary/70" />
+              <span className="text-[10px] font-semibold text-primary/70">Powered by Gemini AI</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              This summary was generated by AI based on the lecture title. For best results, review it alongside the actual lecture content.
+            </p>
+          </div>
+        )}
       </div>
     </ScrollArea>
   )
@@ -894,6 +1003,8 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
                 onSeek={handleSeek}
                 onSkip={handleSkip}
                 lectureTitle={selectedLecture?.title}
+                youtubeUrl={selectedLecture?.youtubeUrl}
+                videoUrl={selectedLecture?.videoUrl}
               />
             </div>
             <TranscriptPanel currentTime={currentTime} onSeek={handleSeek} />
@@ -928,9 +1039,15 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
                   </TabsTrigger>
                 </TabsList>
               </div>
-              <TabsContent value="chat" className="flex-1 overflow-hidden mt-0"><ChatTab /></TabsContent>
-              <TabsContent value="summary" className="flex-1 overflow-hidden mt-0"><SummaryTab /></TabsContent>
-              <TabsContent value="mindmap" className="flex-1 overflow-hidden mt-0"><StudyMindMap /></TabsContent>
+              <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
+                <ChatTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+              </TabsContent>
+              <TabsContent value="summary" className="flex-1 overflow-hidden mt-0">
+                <SummaryTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+              </TabsContent>
+              <TabsContent value="mindmap" className="flex-1 overflow-hidden mt-0">
+                <StudyMindMap videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+              </TabsContent>
             </Tabs>
           </div>
         </ResizablePanel>

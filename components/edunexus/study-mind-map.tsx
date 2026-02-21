@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Info, Zap, Plus, Trash2, Pencil, Check, X, ZoomIn, ZoomOut, Undo2, GripHorizontal, Move } from "lucide-react"
+import { Info, Zap, Plus, Trash2, Pencil, Check, X, ZoomIn, ZoomOut, Undo2, GripHorizontal, Move, Sparkles, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { queryGemini } from "@/lib/api/gemini.service"
 
 /* ------------------------------------------------------------------ */
 /*  Types & Data                                                       */
@@ -528,7 +529,7 @@ function DraggableMindMapNode({
 /*  Mind Map Container                                                 */
 /* ------------------------------------------------------------------ */
 
-export function StudyMindMap() {
+export function StudyMindMap({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string } = {}) {
   const [nodes, setNodes] = useState<MindNode[]>(() => JSON.parse(JSON.stringify(INITIAL_NODES)))
   const [history, setHistory] = useState<MindNode[][]>([])
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -571,6 +572,98 @@ export function StudyMindMap() {
       return prev.slice(0, -1)
     })
   }, [])
+
+  const [aiGenerating, setAiGenerating] = useState(false)
+
+  /* ---------- AI generate mind map ---------- */
+  const handleAIGenerate = useCallback(async () => {
+    if (!videoTitle || aiGenerating) return
+    setAiGenerating(true)
+    try {
+      const prompt = `Generate a mind map structure for the topic: "${videoTitle}"${videoSubject ? ` (Subject: ${videoSubject})` : ""}.
+
+Return ONLY a JSON object with this exact structure (no markdown, no code blocks, just raw JSON):
+{
+  "center": "Main Topic",
+  "branches": [
+    {
+      "label": "Branch 1",
+      "children": ["Leaf 1", "Leaf 2"]
+    },
+    {
+      "label": "Branch 2",
+      "children": ["Leaf 3", "Leaf 4"]
+    }
+  ]
+}
+
+Create 4-6 branches with 2-3 children each. Make them academically relevant to the topic.`
+
+      const result = await queryGemini(prompt)
+      const text = result.answer || ""
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error("No JSON found")
+
+      const data = JSON.parse(jsonMatch[0])
+      if (!data.center || !data.branches) throw new Error("Invalid structure")
+
+      const newNodes: MindNode[] = []
+      const coreColor = BRANCH_COLORS[0]
+
+      newNodes.push({
+        id: "core",
+        label: data.center,
+        color: coreColor.color,
+        bgColor: coreColor.bgColor,
+        glowColor: coreColor.glowColor,
+        glowStrong: coreColor.glowStrong,
+        x: 50, y: 50, type: "core",
+      })
+
+      const branchAngles = data.branches.map((_: unknown, i: number) =>
+        (i / data.branches.length) * Math.PI * 2 - Math.PI / 2
+      )
+
+      data.branches.forEach((branch: { label: string; children?: string[] }, bi: number) => {
+        const c = BRANCH_COLORS[(bi + 1) % BRANCH_COLORS.length]
+        const angle = branchAngles[bi]
+        const bx = 50 + Math.cos(angle) * 30
+        const by = 50 + Math.sin(angle) * 30
+        const branchId = `ai-branch-${bi}`
+
+        newNodes.push({
+          id: branchId, label: branch.label,
+          color: c.color, bgColor: c.bgColor, glowColor: c.glowColor, glowStrong: c.glowStrong,
+          x: Math.max(8, Math.min(92, bx)), y: Math.max(8, Math.min(92, by)),
+          type: "branch", parentId: "core",
+        })
+
+        if (branch.children) {
+          branch.children.forEach((child: string, ci: number) => {
+            const leafAngle = angle + ((ci - (branch.children!.length - 1) / 2) * 0.4)
+            const lx = bx + Math.cos(leafAngle) * 15
+            const ly = by + Math.sin(leafAngle) * 15
+            newNodes.push({
+              id: `ai-leaf-${bi}-${ci}`, label: child,
+              color: c.color, bgColor: c.bgColor, glowColor: c.glowColor, glowStrong: c.glowStrong,
+              x: Math.max(5, Math.min(95, lx)), y: Math.max(5, Math.min(95, ly)),
+              type: "leaf", parentId: branchId,
+            })
+          })
+        }
+      })
+
+      pushHistory()
+      setNodes(newNodes)
+      setSelectedNode(null)
+      setEditingNode(null)
+    } catch (err) {
+      console.error("AI mind map generation failed:", err)
+    } finally {
+      setAiGenerating(false)
+    }
+  }, [videoTitle, videoSubject, aiGenerating, pushHistory])
 
   /* ---------- drag logic ---------- */
   const handleDragStart = useCallback((id: string, e: React.MouseEvent | React.TouchEvent) => {
@@ -854,6 +947,20 @@ export function StudyMindMap() {
               )}
             </>
           )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1 text-[10px] text-primary hover:text-primary hover:bg-primary/10"
+            onClick={handleAIGenerate}
+            disabled={aiGenerating || !videoTitle}
+          >
+            {aiGenerating ? (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</>
+            ) : (
+              <><Sparkles className="h-3 w-3" /> AI Generate</>
+            )}
+          </Button>
 
           <button
             onClick={handleReset}
