@@ -26,6 +26,7 @@ import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { queryGeminiWithDocuments } from "@/lib/api/gemini.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
+import { getTopicDocuments, getTopicDefinition, type TopicDocument } from "@/lib/api/topic-documents"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
 
 /* ---------- Supabase material type ---------- */
@@ -64,13 +65,13 @@ function scoreRelevance(material: BackendMaterial, query: string): number {
   const desc = (material.description || "").toLowerCase()
   const content = (material.content || "").toLowerCase()
   const subject = (material.subject?.name || "").toLowerCase()
-  const filePath = (material.filePath || "").toLowerCase()
+  const type = (material.type || "").toLowerCase()
 
   // Full query match (highest weight)
   if (desc.includes(q)) score += 40
   if (content.includes(q)) score += 30
   if (subject.includes(q)) score += 25
-  if (filePath.includes(q)) score += 15
+  if (type.includes(q)) score += 15
 
   // Per-token matching
   for (const token of tokens) {
@@ -78,7 +79,7 @@ function scoreRelevance(material: BackendMaterial, query: string): number {
     if (desc.includes(token)) score += 12
     if (content.includes(token)) score += 8
     if (subject.includes(token)) score += 6
-    if (filePath.includes(token)) score += 4
+    if (type.includes(token)) score += 4
   }
 
   // Normalize to 0-100
@@ -278,6 +279,24 @@ function AISynthesisCard({
   const [fallbackError, setFallbackError] = useState(false)
   const [scholarLink, setScholarLink] = useState<string | null>(null)
 
+  // Topic-specific hardcoded documents
+  const [topicDocuments, setTopicDocuments] = useState<TopicDocument[]>([])
+  const [topicDefinition, setTopicDefinition] = useState<string | null>(null)
+
+  // 0. Get hardcoded topic documents whenever query changes
+  useEffect(() => {
+    if (!query) {
+      setTopicDocuments([])
+      setTopicDefinition(null)
+      return
+    }
+
+    const docs = getTopicDocuments(query)
+    const definition = getTopicDefinition(query)
+    setTopicDocuments(docs)
+    setTopicDefinition(definition)
+  }, [query])
+
   // 1. Call Gemini with document context (primary) whenever query changes
   useEffect(() => {
     if (!query) return
@@ -288,13 +307,13 @@ function AISynthesisCard({
     setGeminiSources([])
 
     // Build document context from relevant materials
-    const relevantDocs = supabaseMaterials
-      .filter((m) => scoreSupabaseMaterial(m, query) > 30)
+    const relevantDocs = materials
+      .filter((m) => scoreRelevance(m, query) > 30)
       .slice(0, 5)
       .map((m) => ({
-        title: m.title,
-        content: m.description || m.title,
-        source: m.file_url || m.external_url || m.title,
+        title: m.subject?.name || "Material",
+        content: m.description || m.content || "Material",
+        source: m.filePath || "Material",
       }))
 
     queryGeminiWithDocuments(query, relevantDocs)
@@ -310,7 +329,7 @@ function AISynthesisCard({
         setGeminiError(true)
       })
       .finally(() => setGeminiLoading(false))
-  }, [query, supabaseMaterials])
+  }, [query, materials])
 
   // 2. Call n8n workflow as fallback
   useEffect(() => {
@@ -438,8 +457,8 @@ function AISynthesisCard({
                 </h4>
                 <div className="space-y-2">
                   {geminiSources.map((source, idx) => {
-                    const material = supabaseMaterials.find(
-                      (m) => m.file_url === source || m.external_url === source || m.title === source
+                    const material = materials.find(
+                      (m) => m.filePath === source || m.subject?.name === source
                     )
                     return (
                       <div
@@ -449,15 +468,15 @@ function AISynthesisCard({
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">
-                            {material?.title || source}
+                            {material?.subject?.name || source}
                           </p>
                           {material && (
                             <p className="text-[11px] text-muted-foreground">
-                              by {material.faculty_name || "Faculty"} • {material.subject}
+                              {material.type} • {material.description?.substring(0, 40)}
                             </p>
                           )}
                         </div>
-                        {material?.file_url && (
+                        {material?.filePath && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -495,6 +514,87 @@ function AISynthesisCard({
             <p className="text-muted-foreground italic">
               No AI explanation available for this query. Try searching with a more specific topic.
             </p>
+          </div>
+        )}
+
+        {/* Topic-Specific Hardcoded Documents Section */}
+        {topicDocuments.length > 0 && (
+          <div className="border-t border-border pt-4 mt-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                <BookOpen className="h-3.5 w-3.5" />
+                Top Resources on {query}
+              </h4>
+              <div className="space-y-2">
+                {topicDocuments.slice(0, 5).map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-start gap-3 rounded-lg border border-border/50 bg-secondary/20 p-3 hover:bg-secondary/40 transition-colors"
+                  >
+                    {/* Type Icon */}
+                    <div className="pt-0.5">
+                      {doc.type === "research_paper" && (
+                        <FileText className="h-4 w-4 text-blue-400" />
+                      )}
+                      {doc.type === "video_lecture" && (
+                        <Video className="h-4 w-4 text-red-400" />
+                      )}
+                      {doc.type === "presentation" && (
+                        <Presentation className="h-4 w-4 text-orange-400" />
+                      )}
+                      {doc.type === "notes" && (
+                        <BookOpen className="h-4 w-4 text-green-400" />
+                      )}
+                      {doc.type === "book" && (
+                        <FileText className="h-4 w-4 text-purple-400" />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground line-clamp-2">
+                        {doc.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        by {doc.author} • {doc.department}
+                      </p>
+                      <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-1">
+                        {doc.description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {doc.fileSize && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.fileSize}
+                          </Badge>
+                        )}
+                        {doc.duration && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.duration}
+                          </Badge>
+                        )}
+                        {doc.pages && (
+                          <Badge variant="secondary" className="text-[10px] py-0">
+                            {doc.pages}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] py-0">
+                          {Math.round(doc.relevanceScore)}% match
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Download Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

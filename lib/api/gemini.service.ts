@@ -9,12 +9,11 @@ export interface GeminiResponse {
 }
 
 /**
- * Query Gemini API for comprehensive answers
- * Used for smart search synthesis
+ * Query Gemini API for direct answers
+ * Gemini answers as itself without using uploaded document context
  */
 export async function queryGemini(
-  query: string,
-  context?: string
+  query: string
 ): Promise<GeminiResponse> {
   try {
     if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
@@ -23,6 +22,77 @@ export async function queryGemini(
         sources: [],
         error: 'GEMINI_NOT_CONFIGURED',
       }
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    const prompt = `You are an expert educational assistant. Provide a comprehensive, well-structured answer to the following question.
+
+Question: ${query}
+
+Guidelines:
+- Be clear and detailed
+- Use examples where appropriate
+- Structure the answer logically
+- Keep technical accuracy
+- Be concise but thorough`
+
+    console.log('[v0] Querying Gemini with:', { query })
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.7,
+      },
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        },
+      ],
+    })
+
+    const answer =
+      result.response.text() ||
+      'Unable to generate response. Please try again.'
+
+    console.log('[v0] Gemini response received, length:', answer.length)
+
+    return {
+      answer,
+      sources: [],
+      error: undefined,
+    }
+  } catch (error) {
+    console.error('[v0] Gemini API error:', error)
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred'
+
+    return {
+      answer: `Error querying Gemini: ${errorMessage}`,
+      sources: [],
+      error: 'GEMINI_ERROR',
+    }
+  }
+}
     }
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
