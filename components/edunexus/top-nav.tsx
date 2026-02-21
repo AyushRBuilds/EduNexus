@@ -216,6 +216,7 @@ export function TopNav({
   onLogoClick?: () => void
   isSticky?: boolean
   activeView?: ViewId
+  onNavigate?: (view: ViewId) => void
 }) {
   const { user, logout } = useAuth()
   const { resolvedTheme, setTheme } = useTheme()
@@ -500,11 +501,23 @@ export function TopNav({
             )}
           </div>
 
-          {/* Role Badge */}
-          <div className={`hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 ${config.bgColor} sm:flex`}>
-            <RoleIcon className={`h-3.5 w-3.5 ${config.color}`} />
-            <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
-          </div>
+          {/* Quick Action Button */}
+          {onNavigate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate(role === "student" ? "study" : role === "faculty" ? "faculty" : "admin")}
+              className={cn("hidden h-8 gap-1.5 sm:flex border-opacity-20 hover:border-opacity-30", config.color, config.bgColor.replace("/15", "/10"))}
+            >
+              <RoleIcon className="h-3.5 w-3.5" />
+              <span>{role === "student" ? "Study Mode" : role === "faculty" ? "Faculty Studio" : "Admin Studio"}</span>
+            </Button>
+          ) : (
+            <div className={`hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 ${config.bgColor} sm:flex`}>
+              <RoleIcon className={`h-3.5 w-3.5 ${config.color}`} />
+              <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
+            </div>
+          )}
 
           {/* User Avatar */}
           <button

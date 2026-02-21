@@ -414,6 +414,8 @@ function VideoSearchLanding({ onSelectVideo, catalog }: { onSelectVideo: (id: st
   )
 }
 
+// Force turbopack refresh
+
 /* ------------------------------------------------------------------ */
 /*  Transcript & Video Data                                            */
 /* ------------------------------------------------------------------ */
@@ -458,7 +460,7 @@ const INITIAL_CHAT: ChatMessage[] = [
 const AI_RESPONSES: Record<string, string> = {
   "default": "Great question! Based on the lecture content, the Laplace Transform is an integral transform that converts time-domain functions into the s-domain (complex frequency domain). This makes it much easier to solve differential equations by turning them into algebraic equations. Would you like me to explain any specific property in more detail?",
   "definition": "The formal definition is: L{f(t)} = F(s) = integral from 0 to infinity of e^(-st) f(t) dt, where s is a complex variable (s = sigma + j*omega). The transform essentially decomposes a time-domain signal into its complex exponential components.",
-  "properties": "The key properties covered in this lecture are:\n1. Linearity: L{af(t) + bg(t)} = aF(s) + bG(s)\n2. Time-shifting: L{f(t-a)} = e^(-as)F(s)\n3. Differentiation: L{f'(t)} = sF(s) - f(0)\n4. Convolution: L{f*g} = F(s)G(s)\nEach property has practical applications in circuit analysis and control systems.",
+  "properties": "The key properties covered in this lecture are:\n1. Linearity: L{af(t) + bg(t)} = aF(s) + bG(s)\n2. Time-shifting: L{f(t - a)} = e^(-as)F(s)\n3. Differentiation: L{f'(t)} = sF(s) - f(0)\n4. Convolution: L{f*g} = F(s)G(s)\nEach property has practical applications in circuit analysis and control systems.",
   "circuit": "In circuit analysis, the Laplace Transform converts circuit differential equations (from KVL/KCL) into algebraic equations in the s-domain. Impedances become Z_R = R, Z_L = sL, Z_C = 1/(sC). The transfer function H(s) is a ratio of polynomials, and its poles determine the circuit's natural response.",
   "inverse": "The Inverse Laplace Transform recovers f(t) from F(s). The primary methods are:\n1. Partial fraction decomposition - break F(s) into simpler terms\n2. Table lookup - match each term to known transform pairs\n3. Convolution theorem - for products of transforms\n4. Complex contour integration (Bromwich integral) - for advanced cases",
 }
@@ -474,9 +476,9 @@ const SUMMARY_SECTIONS = [
   {
     title: "Key Properties", items: [
       "Linearity: L{af(t) + bg(t)} = aF(s) + bG(s)",
-      "Time-shifting: L{f(t-a)u(t-a)} = e^(-as)F(s)",
+      "Time-shifting: L{f(t - a)u(t-a)} = e^(-as)F(s)",
       "Differentiation: L{f'(t)} = sF(s) - f(0)",
-      "Convolution: L{f*g(t)} = F(s)G(s)",
+      "Convolution: L{f * g(t)} = F(s)G(s)",
     ]
   },
   {
@@ -689,18 +691,18 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
 
     try {
       const prompt = `Generate a detailed and realistic educational transcript for a video titled "${video.title}" that covers the entire topic in depth.
-Course: ${video.course}
-Instructor: ${video.instructor}
-${video.description ? `Description: ${video.description}` : ""}
+              Course: ${video.course}
+              Instructor: ${video.instructor}
+              ${video.description ? `Description: ${video.description}` : ""}
 
-Output ONLY a valid block of JSON array of objects (generate as many objects as needed to cover the full topic comprehensively). Each object MUST have:
-- "id": number (e.g. 1, 2, 3...)
-- "start": number (start time in seconds, starting from 0, e.g. 0, 30, 60...)
-- "end": number (end time in seconds, e.g. 30, 60, 90...)
-- "speaker": string (instructor name)
-- "text": string (the spoken text sentence or paragraph)
+              Output ONLY a valid block of JSON array of objects (generate as many objects as needed to cover the full topic comprehensively). Each object MUST have:
+              - "id": number (e.g. 1, 2, 3...)
+              - "start": number (start time in seconds, starting from 0, e.g. 0, 30, 60...)
+              - "end": number (end time in seconds, e.g. 30, 60, 90...)
+              - "speaker": string (instructor name)
+              - "text": string (the spoken text sentence or paragraph)
 
-Make the text highly relevant to the video title. Do NOT output any markdown blocks like \`\`\`json or \`\`\`, ONLY the raw JSON array.`
+              Make the text highly relevant to the video title. Do NOT output any markdown blocks like \`\`\`json or \`\`\`, ONLY the raw JSON array.`
 
       const result = await queryGemini(prompt)
       let rawJson = result.answer.replace(/```json/gi, '').replace(/```/g, '').trim()
@@ -917,14 +919,14 @@ function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSu
     try {
       const prompt = `Generate a comprehensive study summary for a lecture titled "${videoTitle}"${videoSubject ? ` (Subject: ${videoSubject})` : ""}.
 
-Format the summary as:
-1. **Key Concepts** - List the main concepts covered (4-6 bullet points)
-2. **Core Definitions** - Important definitions and formulas
-3. **Applications** - Real-world applications discussed
-4. **Study Tips** - 2-3 practical tips for studying this topic
-5. **Key Takeaways** - 3 most important things to remember
+                Format the summary as:
+                1. **Key Concepts** - List the main concepts covered (4-6 bullet points)
+                2. **Core Definitions** - Important definitions and formulas
+                3. **Applications** - Real-world applications discussed
+                4. **Study Tips** - 2-3 practical tips for studying this topic
+                5. **Key Takeaways** - 3 most important things to remember
 
-Be academically rigorous and detailed. Use clear, student-friendly language.`
+                Be academically rigorous and detailed. Use clear, student-friendly language.`
 
       const result = await queryGemini(prompt)
       setSummary(result.answer || "Could not generate summary.")
