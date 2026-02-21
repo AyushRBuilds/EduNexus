@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "./auth-context"
 import { getSubjects, getMaterials } from "@/lib/api/academic.service"
 import { aiExplain, n8nChat } from "@/lib/api/ai.service"
+import { queryGeminiWithDocuments } from "@/lib/api/gemini.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
 import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
@@ -260,6 +261,12 @@ function AISynthesisCard({
   const [expanded, setExpanded] = useState(false)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
+  // Gemini AI response with document sources
+  const [geminiAnswer, setGeminiAnswer] = useState<string | null>(null)
+  const [geminiLoading, setGeminiLoading] = useState(false)
+  const [geminiError, setGeminiError] = useState(false)
+  const [geminiSources, setGeminiSources] = useState<string[]>([])
+
   // n8n is the PRIMARY AI source for search & explain
   const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
   const [n8nLoading, setN8nLoading] = useState(false)
@@ -271,9 +278,44 @@ function AISynthesisCard({
   const [fallbackError, setFallbackError] = useState(false)
   const [scholarLink, setScholarLink] = useState<string | null>(null)
 
-  // 1. Call n8n workflow (primary) whenever query changes
+  // 1. Call Gemini with document context (primary) whenever query changes
   useEffect(() => {
     if (!query) return
+
+    setGeminiLoading(true)
+    setGeminiError(false)
+    setGeminiAnswer(null)
+    setGeminiSources([])
+
+    // Build document context from relevant materials
+    const relevantDocs = supabaseMaterials
+      .filter((m) => scoreSupabaseMaterial(m, query) > 30)
+      .slice(0, 5)
+      .map((m) => ({
+        title: m.title,
+        content: m.description || m.title,
+        source: m.file_url || m.external_url || m.title,
+      }))
+
+    queryGeminiWithDocuments(query, relevantDocs)
+      .then((res) => {
+        if (res.error || !res.answer) {
+          setGeminiError(true)
+        } else {
+          setGeminiAnswer(res.answer)
+          setGeminiSources(res.sources)
+        }
+      })
+      .catch(() => {
+        setGeminiError(true)
+      })
+      .finally(() => setGeminiLoading(false))
+  }, [query, supabaseMaterials])
+
+  // 2. Call n8n workflow as fallback
+  useEffect(() => {
+    if (!query) return
+    if (!geminiError) return // Only call if Gemini failed
 
     setN8nLoading(true)
     setN8nError(false)
@@ -291,9 +333,9 @@ function AISynthesisCard({
         setN8nError(true)
       })
       .finally(() => setN8nLoading(false))
-  }, [query])
+  }, [query, geminiError])
 
-  // 2. Call backend /ai/explain as fallback when n8n fails
+  // 3. Call backend /ai/explain as fallback when n8n fails
   useEffect(() => {
     // Only call fallback if n8n has finished and failed
     if (n8nLoading || !n8nError) return
@@ -317,11 +359,11 @@ function AISynthesisCard({
       .finally(() => setFallbackLoading(false))
   }, [query, bestSubject, n8nLoading, n8nError])
 
-  // Derived: the best available answer
-  const aiAnswer = n8nAnswer || fallbackAnswer
-  const aiLoading = n8nLoading || (n8nError && fallbackLoading)
-  const aiError = n8nError && fallbackError
-  const answerSource = n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
+  // Derived: the best available answer (prioritizes Gemini)
+  const aiAnswer = geminiAnswer || n8nAnswer || fallbackAnswer
+  const aiLoading = geminiLoading || (geminiError && n8nLoading) || (geminiError && n8nError && fallbackLoading)
+  const aiError = geminiError && n8nError && fallbackError
+  const answerSource = geminiAnswer ? "Gemini AI" : n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
 
   // Derive related subjects from matched materials
   const relatedSubjects = Array.from(
@@ -372,19 +414,65 @@ function AISynthesisCard({
         )}
 
         {!aiLoading && !materialsLoading && aiAnswer && (
-          <div>
-            <div className="mb-1.5 flex items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                AI Explanation
-              </h3>
-              {answerSource && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  <Zap className="h-2.5 w-2.5" />
-                  {answerSource}
-                </span>
-              )}
+          <div className="space-y-4">
+            <div>
+              <div className="mb-1.5 flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  AI Explanation
+                </h3>
+                {answerSource && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <Zap className="h-2.5 w-2.5" />
+                    {answerSource}
+                  </span>
+                )}
+              </div>
+              <p className="whitespace-pre-line leading-relaxed text-sm">{aiAnswer}</p>
             </div>
-            <p className="whitespace-pre-line">{aiAnswer}</p>
+
+            {/* Show source documents when Gemini is used */}
+            {geminiAnswer && geminiSources.length > 0 && (
+              <div className="border-t border-border pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Based on Uploaded Materials
+                </h4>
+                <div className="space-y-2">
+                  {geminiSources.map((source, idx) => {
+                    const material = supabaseMaterials.find(
+                      (m) => m.file_url === source || m.external_url === source || m.title === source
+                    )
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 rounded-lg border border-border/50 bg-secondary/30 px-3 py-2"
+                      >
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">
+                            {material?.title || source}
+                          </p>
+                          {material && (
+                            <p className="text-[11px] text-muted-foreground">
+                              by {material.faculty_name || "Faculty"} • {material.subject}
+                            </p>
+                          )}
+                        </div>
+                        {material?.file_url && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0 h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => downloadMaterial(material)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
