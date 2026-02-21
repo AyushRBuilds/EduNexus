@@ -7,6 +7,7 @@ import {
   Volume2,
   VolumeX,
   Maximize,
+  Minimize,
   SkipBack,
   SkipForward,
   MessageSquare,
@@ -38,6 +39,7 @@ import { Badge } from "@/components/ui/badge"
 import { StudyMindMap } from "./study-mind-map"
 import { queryGemini } from "@/lib/api/gemini.service"
 import { FormattedMarkdown } from "./formatted-markdown"
+import type { SupabaseMaterial } from "@/lib/api/types"
 
 /* ------------------------------------------------------------------ */
 /*  Video Lecture Catalog Data                                         */
@@ -61,6 +63,8 @@ interface VideoLecture {
   date: string
   youtubeUrl?: string
   videoUrl?: string
+  isSupabase?: boolean
+  description?: string
 }
 
 const VIDEO_CATALOG: VideoLecture[] = [
@@ -73,7 +77,7 @@ const VIDEO_CATALOG: VideoLecture[] = [
     department: "Electrical Engineering",
     duration: "5:00",
     durationSeconds: 300,
-    thumbnail: "LT",
+    thumbnail: "https://img.youtube.com/vi/n2y7n6jw5d0/mqdefault.jpg",
     views: 1247,
     rating: 4.8,
     lectureNumber: 14,
@@ -203,18 +207,18 @@ const VIDEO_CATALOG: VideoLecture[] = [
   },
 ]
 
-const DEPARTMENTS = [...new Set(VIDEO_CATALOG.map((v) => v.department))]
-
 /* ------------------------------------------------------------------ */
 /*  Video Search / Browse Landing                                      */
 /* ------------------------------------------------------------------ */
 
-function VideoSearchLanding({ onSelectVideo }: { onSelectVideo: (id: string) => void }) {
+function VideoSearchLanding({ onSelectVideo, catalog }: { onSelectVideo: (id: string) => void; catalog: VideoLecture[] }) {
   const [query, setQuery] = useState("")
   const [deptFilter, setDeptFilter] = useState<string>("all")
   const [showFilters, setShowFilters] = useState(false)
 
-  const filtered = VIDEO_CATALOG.filter((v) => {
+  const DEPARTMENTS = [...new Set(catalog.map((v) => v.department))]
+
+  const filtered = catalog.filter((v) => {
     if (deptFilter !== "all" && v.department !== deptFilter) return false
     if (query) {
       const q = query.toLowerCase()
@@ -311,7 +315,7 @@ function VideoSearchLanding({ onSelectVideo }: { onSelectVideo: (id: string) => 
       </div>
 
       {/* Results */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-6 py-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs text-muted-foreground">
@@ -332,9 +336,17 @@ function VideoSearchLanding({ onSelectVideo }: { onSelectVideo: (id: string) => 
                     backgroundImage: "linear-gradient(rgba(56,189,248,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.5) 1px, transparent 1px)",
                     backgroundSize: "30px 30px",
                   }} />
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                    <span className="text-sm font-bold text-primary">{video.thumbnail}</span>
-                  </div>
+                  {video.thumbnail.startsWith("http") ? (
+                    <img
+                      src={video.thumbnail}
+                      alt={video.title}
+                      className="absolute inset-0 h-full w-full object-cover object-center opacity-80 group-hover:opacity-100 transition-opacity"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 z-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                      <span className="text-sm font-bold text-primary">{video.thumbnail}</span>
+                    </div>
+                  )}
                   {/* Duration pill */}
                   <span className="absolute bottom-2 right-2 rounded-md bg-background/80 px-2 py-0.5 text-[10px] font-medium text-foreground backdrop-blur-sm">
                     {video.duration}
@@ -397,7 +409,7 @@ function VideoSearchLanding({ onSelectVideo }: { onSelectVideo: (id: string) => 
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
@@ -494,6 +506,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+/** Extracts a YouTube identifier */
 function getYouTubeId(url?: string): string | null {
   if (!url) return null
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/)
@@ -550,7 +563,7 @@ function VideoPlayer({
         {/* YouTube Embed */}
         {ytId && (
           <iframe
-            src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1`}
+            src={`https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             className="absolute inset-0 w-full h-full"
@@ -648,48 +661,138 @@ function VideoPlayer({
 /*  Transcript                                                         */
 /* ------------------------------------------------------------------ */
 
-function TranscriptPanel({ currentTime, onSeek }: { currentTime: number; onSeek: (time: number) => void }) {
+function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture | null; currentTime: number; onSeek: (time: number) => void }) {
+  const [transcript, setTranscript] = useState<TranscriptSegment[]>(TRANSCRIPT)
+  const [loading, setLoading] = useState(false)
+  const [needsGeneration, setNeedsGeneration] = useState(false)
   const activeRef = useRef<HTMLButtonElement>(null)
-  const activeSegmentId = TRANSCRIPT.find((seg) => currentTime >= seg.start && currentTime < seg.end)?.id
+
+  const activeSegmentId = transcript.find((seg) => currentTime >= seg.start && currentTime < seg.end)?.id
 
   useEffect(() => {
     if (activeRef.current) activeRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
   }, [activeSegmentId])
 
+  useEffect(() => {
+    if (!video) return
+
+    // For all videos, ask user to generate transcript
+    setNeedsGeneration(true)
+    setTranscript([])
+  }, [video])
+
+  const handleGenerateTranscript = async () => {
+    if (!video) return
+    setLoading(true)
+    setNeedsGeneration(false)
+    let isMounted = true
+
+    try {
+      const prompt = `Generate a detailed and realistic educational transcript for a video titled "${video.title}" that covers the entire topic in depth.
+Course: ${video.course}
+Instructor: ${video.instructor}
+${video.description ? `Description: ${video.description}` : ""}
+
+Output ONLY a valid block of JSON array of objects (generate as many objects as needed to cover the full topic comprehensively). Each object MUST have:
+- "id": number (e.g. 1, 2, 3...)
+- "start": number (start time in seconds, starting from 0, e.g. 0, 30, 60...)
+- "end": number (end time in seconds, e.g. 30, 60, 90...)
+- "speaker": string (instructor name)
+- "text": string (the spoken text sentence or paragraph)
+
+Make the text highly relevant to the video title. Do NOT output any markdown blocks like \`\`\`json or \`\`\`, ONLY the raw JSON array.`
+
+      const result = await queryGemini(prompt)
+      let rawJson = result.answer.replace(/```json/gi, '').replace(/```/g, '').trim()
+
+      const jsonStart = rawJson.indexOf('[')
+      const jsonEnd = rawJson.lastIndexOf(']')
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        rawJson = rawJson.substring(jsonStart, jsonEnd + 1)
+      }
+
+      const parsed = JSON.parse(rawJson) as TranscriptSegment[]
+
+      if (isMounted && Array.isArray(parsed) && parsed.length > 0) {
+        setTranscript(parsed)
+      } else {
+        throw new Error("Invalid structure")
+      }
+    } catch (err) {
+      console.error("Failed to generate transcript", err)
+      if (isMounted) {
+        setTranscript([
+          { id: 1, start: 0, end: 3600, speaker: video.instructor, text: `Welcome to this lecture on ${video.title}. Our AI encountered an error processing the transcript. Please try generating it again later.` }
+        ])
+      }
+    } finally {
+      if (isMounted) setLoading(false)
+    }
+
+    return () => { isMounted = false }
+  }
+
+  // effect removed as logic is now in handleGenerateTranscript
+
   return (
-    <div className="flex flex-col border-t border-border bg-card/60">
+    <div className="flex flex-col h-full bg-card/60">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <FileText className="h-3.5 w-3.5 text-primary" />
           <h3 className="text-xs font-semibold text-foreground">Transcript</h3>
+          {video?.isSupabase && (
+            <Badge variant="outline" className="ml-2 text-[9px] border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              AI Generated
+            </Badge>
+          )}
         </div>
         <button className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
           Auto-scroll
           <ChevronDown className="h-3 w-3" />
         </button>
       </div>
-      <ScrollArea className="h-[200px] lg:h-[240px]">
-        <div className="flex flex-col gap-0.5 p-2">
-          {TRANSCRIPT.map((seg) => {
-            const isActive = seg.id === activeSegmentId
-            const isPast = currentTime > seg.end
-            return (
-              <button
-                key={seg.id}
-                ref={isActive ? activeRef : undefined}
-                onClick={() => onSeek(seg.start)}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg px-3 py-2 text-left transition-all",
-                  isActive ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/40",
-                )}
-              >
-                <span className={cn("mt-0.5 shrink-0 text-[10px] tabular-nums font-mono", isActive ? "text-primary font-semibold" : isPast ? "text-muted-foreground/50" : "text-muted-foreground")}>{formatTime(seg.start)}</span>
-                <p className={cn("text-xs leading-relaxed", isActive ? "text-foreground font-medium" : isPast ? "text-muted-foreground/60" : "text-secondary-foreground")}>{seg.text}</p>
-              </button>
-            )
-          })}
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-0.5 p-2 h-full">
+          {needsGeneration ? (
+            <div className="flex flex-col items-center justify-center h-full py-12 gap-4 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-1">AI Transcript Available</h4>
+                <p className="text-xs text-muted-foreground max-w-[200px]">Generate a full lecture transcript using Gemini AI, or maximize other tabs if you prefer.</p>
+              </div>
+              <Button onClick={handleGenerateTranscript} className="h-8 text-xs px-4" size="sm">
+                Generate Transcript
+              </Button>
+            </div>
+          ) : loading ? (
+            <div className="flex flex-col items-center justify-center h-full py-12 gap-3 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <p className="text-xs">AI is transcribing lecture...</p>
+            </div>
+          ) : (
+            transcript.map((seg) => {
+              const isActive = seg.id === activeSegmentId
+              const isPast = currentTime > seg.end
+              return (
+                <button
+                  key={seg.id}
+                  ref={isActive ? activeRef : undefined}
+                  onClick={() => onSeek(seg.start)}
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg px-3 py-2 text-left transition-all",
+                    isActive ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/40",
+                  )}
+                >
+                  <span className={cn("mt-0.5 shrink-0 text-[10px] tabular-nums font-mono", isActive ? "text-primary font-semibold" : isPast ? "text-muted-foreground/50" : "text-muted-foreground")}>{formatTime(seg.start)}</span>
+                  <p className={cn("text-xs leading-relaxed", isActive ? "text-foreground font-medium" : isPast ? "text-muted-foreground/60" : "text-secondary-foreground")}>{seg.text}</p>
+                </button>
+              )
+            })
+          )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
@@ -914,10 +1017,58 @@ Be academically rigorous and detailed. Use clear, student-friendly language.`
 
 export function StudyWorkspace({ onBack }: { onBack: () => void }) {
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
+  const [catalog, setCatalog] = useState<VideoLecture[]>(VIDEO_CATALOG)
   const [currentTime, setCurrentTime] = useState(42)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    async function fetchFacultyVideos() {
+      try {
+        const res = await fetch("/api/faculty-materials?limit=100")
+        if (res.ok) {
+          const data = await res.json()
+          const supaMaterials: SupabaseMaterial[] = data.materials || []
+
+          const facultyVideos: VideoLecture[] = supaMaterials
+            .filter(m => m.type === "VIDEO" || (m.type === "LINK" && m.external_url?.includes("youtu")))
+            .map(m => {
+              const isYoutube = m.external_url?.includes("youtu")
+              const yId = isYoutube ? getYouTubeId(m.external_url!) : null
+              const thumb = yId ? `https://img.youtube.com/vi/${yId}/mqdefault.jpg` : m.title.slice(0, 2).toUpperCase()
+              return {
+                id: m.id,
+                title: m.title,
+                course: m.subject || "General",
+                courseCode: "FAC",
+                instructor: m.faculty_name || "Faculty",
+                department: "Uploaded",
+                duration: isYoutube ? "YouTube" : "N/A",
+                durationSeconds: 0,
+                thumbnail: yId ? thumb : thumb, // Pass the thumb string (URL or initials) directly
+                views: 0,
+                rating: 5.0,
+                lectureNumber: 1,
+                totalLectures: 1,
+                tags: m.tags || ["Faculty Upload"],
+                date: new Date(m.created_at).toLocaleDateString(),
+                youtubeUrl: isYoutube ? m.external_url! : undefined,
+                videoUrl: !isYoutube ? (m.file_url || m.external_url || undefined) : undefined,
+                isSupabase: true,
+                description: m.description || undefined,
+              }
+            })
+
+          setCatalog([...facultyVideos, ...VIDEO_CATALOG])
+        }
+      } catch (err) {
+        console.error("Failed to load faculty videos", err)
+      }
+    }
+    fetchFacultyVideos()
+  }, [])
 
   useEffect(() => {
     if (isPlaying) {
@@ -947,7 +1098,7 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
     setIsPlaying(false)
   }
 
-  const selectedLecture = selectedVideo ? VIDEO_CATALOG.find((v) => v.id === selectedVideo) : null
+  const selectedLecture = selectedVideo ? (catalog.find((v) => v.id === selectedVideo) || null) : null
 
   // If no video selected, show the search landing
   if (!selectedVideo) {
@@ -962,7 +1113,7 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
           <span className="text-sm font-semibold text-foreground">Study Mode</span>
           <span className="hidden text-[10px] text-muted-foreground sm:block">&middot; Select a lecture to enter the study workspace</span>
         </div>
-        <VideoSearchLanding onSelectVideo={handleSelectVideo} />
+        <VideoSearchLanding onSelectVideo={handleSelectVideo} catalog={catalog} />
       </div>
     )
   }
@@ -996,36 +1147,61 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
 
       {/* Split-screen content -- resizable */}
       <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        <ResizablePanel defaultSize={60} minSize={30} maxSize={80}>
-          <div className="flex h-full flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4">
-              <VideoPlayer
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                isMuted={isMuted}
-                onPlayPause={() => setIsPlaying((p) => !p)}
-                onMute={() => setIsMuted((m) => !m)}
-                onSeek={handleSeek}
-                onSkip={handleSkip}
-                lectureTitle={selectedLecture?.title}
-                youtubeUrl={selectedLecture?.youtubeUrl}
-                videoUrl={selectedLecture?.videoUrl}
-              />
-            </div>
-            <TranscriptPanel currentTime={currentTime} onSeek={handleSeek} />
-          </div>
+        <ResizablePanel
+          defaultSize={60}
+          minSize={30}
+          maxSize={80}
+          className={cn("transition-all duration-300", isMaximized ? "!hidden" : "")}
+        >
+          <ResizablePanelGroup direction="vertical">
+            <ResizablePanel defaultSize={65} minSize={30}>
+              <div className="flex h-full flex-col overflow-y-auto p-4 bg-background">
+                <VideoPlayer
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  isMuted={isMuted}
+                  onPlayPause={() => setIsPlaying((p) => !p)}
+                  onMute={() => setIsMuted((m) => !m)}
+                  onSeek={handleSeek}
+                  onSkip={handleSkip}
+                  lectureTitle={selectedLecture?.title}
+                  youtubeUrl={selectedLecture?.youtubeUrl}
+                  videoUrl={selectedLecture?.videoUrl}
+                />
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle
+              withHandle
+              className="bg-border/30 transition-colors hover:bg-primary/20 data-[resize-handle-active]:bg-primary/40 [&>div]:border-border/50 [&>div]:bg-secondary/60 [&>div]:hover:bg-primary/30"
+            />
+
+            <ResizablePanel defaultSize={35} minSize={20}>
+              <div className="h-full flex flex-col bg-card/60">
+                <TranscriptPanel video={selectedLecture} currentTime={currentTime} onSeek={handleSeek} />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </ResizablePanel>
 
         <ResizableHandle
           withHandle
-          className="bg-border/30 transition-colors hover:bg-primary/20 data-[resize-handle-active]:bg-primary/40 [&>div]:border-border/50 [&>div]:bg-secondary/60 [&>div]:hover:bg-primary/30"
+          className={cn(
+            "bg-border/30 transition-colors hover:bg-primary/20 data-[resize-handle-active]:bg-primary/40 [&>div]:border-border/50 [&>div]:bg-secondary/60 [&>div]:hover:bg-primary/30",
+            isMaximized ? "!hidden" : ""
+          )}
         />
 
-        <ResizablePanel defaultSize={40} minSize={25} maxSize={65}>
+        <ResizablePanel
+          defaultSize={40}
+          minSize={25}
+          maxSize={65}
+          className={cn("transition-all duration-300", isMaximized ? "!flex-[1_1_100%] !max-w-full" : "")}
+        >
           <div className="flex h-full flex-col overflow-hidden bg-card/30">
             <Tabs defaultValue="mindmap" className="flex h-full flex-col">
-              <div className="border-b border-border/60 px-2 pt-2">
-                <TabsList className="w-full bg-secondary/30 h-9">
+              <div className="flex items-center justify-between border-b border-border/60 px-2 pt-2">
+                <TabsList className="w-full bg-secondary/30 h-9 relative">
                   <TabsTrigger value="chat" className="flex-1 gap-1.5 text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none">
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Instant Chat</span>
@@ -1043,14 +1219,23 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
                     <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary animate-pulse" />
                   </TabsTrigger>
                 </TabsList>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-2 h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={() => setIsMaximized(!isMaximized)}
+                  title={isMaximized ? "Restore view layout" : "Maximize study tools"}
+                >
+                  {isMaximized ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                </Button>
               </div>
-              <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
+              <TabsContent value="chat" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
                 <ChatTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
-              <TabsContent value="summary" className="flex-1 overflow-hidden mt-0">
+              <TabsContent value="summary" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
                 <SummaryTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
-              <TabsContent value="mindmap" className="flex-1 overflow-hidden mt-0">
+              <TabsContent value="mindmap" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
                 <StudyMindMap videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
             </Tabs>

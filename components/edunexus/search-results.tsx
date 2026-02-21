@@ -32,23 +32,8 @@ import { aiExplain, n8nChat } from "@/lib/api/ai.service"
 import { queryGeminiWithDocuments } from "@/lib/api/gemini.service"
 import { downloadMaterial, downloadAllMaterials } from "@/lib/api/download"
 import { MaterialViewer } from "./material-viewer"
-import type { BackendMaterial, BackendSubject } from "@/lib/api/types"
-
-/* ---------- Supabase material type ---------- */
-interface SupabaseMaterial {
-  id: string
-  created_at: string
-  faculty_email: string
-  faculty_name: string | null
-  subject: string
-  type: string
-  title: string
-  description: string | null
-  file_url: string | null
-  external_url: string | null
-  file_path: string | null
-  tags: string[]
-}
+import { FormattedMarkdown } from "./formatted-markdown"
+import type { BackendMaterial, BackendSubject, SupabaseMaterial } from "@/lib/api/types"
 
 /* ---------- Filter types ---------- */
 export type ContentFilter = "all" | "research" | "ppt" | "video" | "notes"
@@ -510,7 +495,7 @@ function AISynthesisCard({
                   </span>
                 )}
               </div>
-              <p className="whitespace-pre-line leading-relaxed text-sm">{aiAnswer}</p>
+              <FormattedMarkdown text={aiAnswer} />
             </div>
 
             {/* Show source documents when Gemini is used */}

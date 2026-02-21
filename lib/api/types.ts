@@ -104,3 +104,20 @@ export function mapBackendUserToFrontend(user: BackendUser): FrontendUser {
     semester: user.semester,
   }
 }
+
+// ===== Supabase Types =====
+
+export interface SupabaseMaterial {
+  id: string
+  created_at: string
+  faculty_email: string
+  faculty_name: string | null
+  subject: string
+  type: string
+  title: string
+  description: string | null
+  file_url: string | null
+  external_url: string | null
+  file_path: string | null
+  tags: string[]
+}

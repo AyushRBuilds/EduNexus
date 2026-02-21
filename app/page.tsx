@@ -92,6 +92,7 @@ export default function EduNexusPage() {
             onLogoClick={() => { setActiveView("search"); setHasSearched(false) }}
             isSticky={activeView !== "search"}
             activeView={activeView}
+            onNavigate={handleNavigate}
           />
 
           <main className="flex-1 pb-16 lg:pb-0">
