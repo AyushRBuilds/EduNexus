@@ -849,7 +849,7 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
 
   return (
     <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
         <div className="flex flex-col gap-4">
           {messages.map((msg) => (
             <div key={msg.id} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
@@ -882,7 +882,7 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-2">
           <input
@@ -1072,6 +1072,8 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
     fetchFacultyVideos()
   }, [])
 
+  const selectedLecture = selectedVideo ? (catalog.find((v) => v.id === selectedVideo) || null) : null
+
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -1102,8 +1104,6 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
     setCurrentTime(0)
     setIsPlaying(false)
   }
-
-  const selectedLecture = selectedVideo ? (catalog.find((v) => v.id === selectedVideo) || null) : null
 
   // If no video selected, show the search landing
   if (!selectedVideo) {
@@ -1235,13 +1235,13 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
                   {isMaximized ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
                 </Button>
               </div>
-              <TabsContent value="chat" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
+              <TabsContent value="chat" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
                 <ChatTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
-              <TabsContent value="summary" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
+              <TabsContent value="summary" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
                 <SummaryTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
-              <TabsContent value="mindmap" className="flex-1 data-[state=active]:flex flex-col overflow-hidden mt-0">
+              <TabsContent value="mindmap" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
                 <StudyMindMap videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
               </TabsContent>
             </Tabs>

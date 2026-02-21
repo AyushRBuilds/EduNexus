@@ -209,6 +209,7 @@ export function TopNav({
   onLogoClick,
   isSticky = true,
   activeView = "search",
+  onNavigate,
 }: {
   onSearch: (query: string) => void
   onProfileClick?: () => void
