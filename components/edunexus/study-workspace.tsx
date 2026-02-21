@@ -37,6 +37,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { Badge } from "@/components/ui/badge"
 import { StudyMindMap } from "./study-mind-map"
 import { queryGemini } from "@/lib/api/gemini.service"
+import { FormattedMarkdown } from "./formatted-markdown"
 
 /* ------------------------------------------------------------------ */
 /*  Video Lecture Catalog Data                                         */
@@ -757,7 +758,11 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
                     EduNexus AI
                   </span>
                 )}
-                <p className="whitespace-pre-line">{msg.text}</p>
+                {msg.role === "ai" ? (
+                  <FormattedMarkdown text={msg.text} compact />
+                ) : (
+                  <p>{msg.text}</p>
+                )}
               </div>
             </div>
           ))}
@@ -874,7 +879,7 @@ Be academically rigorous and detailed. Use clear, student-friendly language.`
 
         {!loading && summary && (
           <div className="rounded-xl border border-border/60 bg-secondary/15 p-4">
-            <p className="whitespace-pre-line text-xs leading-relaxed text-secondary-foreground">{summary}</p>
+            <FormattedMarkdown text={summary} className="text-xs" />
           </div>
         )}
 
