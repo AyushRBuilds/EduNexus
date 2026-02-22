@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   Upload,
   Eye,
+  MessageCircle,
+  Send,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -254,18 +256,22 @@ function AISynthesisCard({
   const [expanded, setExpanded] = useState(false)
   const [viewerMaterial, setViewerMaterial] = useState<BackendMaterial | null>(null)
 
-  // Gemini AI response with document sources
+  // On-demand AI synthesis — only triggered by user click
+  const [synthesisRequested, setSynthesisRequested] = useState(false)
   const [geminiAnswer, setGeminiAnswer] = useState<string | null>(null)
   const [geminiLoading, setGeminiLoading] = useState(false)
   const [geminiError, setGeminiError] = useState(false)
   const [geminiSources, setGeminiSources] = useState<string[]>([])
 
-  // n8n is the PRIMARY AI source for search & explain
+  // Chat state
+  const [messages, setMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([])
+  const [chatInput, setChatInput] = useState("")
+  const [chatLoading, setChatLoading] = useState(false)
+
+  // Fallback states
   const [n8nAnswer, setN8nAnswer] = useState<string | null>(null)
   const [n8nLoading, setN8nLoading] = useState(false)
   const [n8nError, setN8nError] = useState(false)
-
-  // Fallback: old backend AI explain (used only when n8n fails)
   const [fallbackAnswer, setFallbackAnswer] = useState<string | null>(null)
   const [fallbackLoading, setFallbackLoading] = useState(false)
   const [fallbackError, setFallbackError] = useState(false)
@@ -277,19 +283,64 @@ function AISynthesisCard({
   const totalRepoSources = repoSupabaseDocs.length + repoBackendDocs.length
   const hasRepoSources = totalRepoSources > 0
 
-  // 1. Call Gemini with document context (primary) whenever query changes
+  // Reset synthesis when query changes
   useEffect(() => {
-    if (!query) return
+    setSynthesisRequested(false)
+    setGeminiAnswer(null)
+    setGeminiError(false)
+    setGeminiSources([])
+    setN8nAnswer(null)
+    setN8nError(false)
+    setFallbackAnswer(null)
+    setFallbackError(false)
+    setScholarLink(null)
+    setMessages([])
+    setChatInput("")
+    setChatLoading(false)
+  }, [query])
+
+  // On-demand AI Synthesis handler
+  const handleSynthesize = useCallback(async () => {
+    setSynthesisRequested(true)
 
     // Build document context from faculty uploads (Supabase)
-    const supabaseDocs = (supabaseMaterials || [])
+    const supabaseDocsRaw = (supabaseMaterials || [])
       .filter((m) => scoreSupabaseMaterial(m, query) > 20)
       .slice(0, 5)
-      .map((m) => ({
-        title: m.title,
-        content: [m.description, m.subject, (m.tags || []).join(", ")].filter(Boolean).join(" — "),
-        source: m.file_url || m.external_url || m.title,
-      }))
+
+    const supabaseDocs = await Promise.all(
+      supabaseDocsRaw.map(async (m) => {
+        let content = [m.description, m.subject, (m.tags || []).join(", ")].filter(Boolean).join(" — ")
+
+        // Extract real text if it's a file
+        const urlToExtract = m.file_url || m.external_url
+        if (urlToExtract && (urlToExtract.toLowerCase().endsWith('.pdf') || urlToExtract.includes('supabase'))) {
+          console.log(`[SmartSearch] Attempting to extract text from: ${m.title} at ${urlToExtract}`)
+          try {
+            const extractRes = await fetch(`/api/extract-text?url=${encodeURIComponent(urlToExtract)}`)
+            console.log(`[SmartSearch] extract-text response status: ${extractRes.status}`)
+            if (extractRes.ok) {
+              const data = await extractRes.json()
+              if (data.text) {
+                console.log(`[SmartSearch] Successfully extracted ${data.text.length} characters of text for ${m.title}`)
+                // Prepend real text, limit to ~8000 chars to avoid token limits per doc
+                content = `[DOCUMENT CONTENT]\n${data.text.substring(0, 8000)}\n\n[METADATA]\n${content}`
+              }
+            } else {
+              console.warn(`[SmartSearch] Failed extract-text API for ${m.title}: ${extractRes.statusText}`)
+            }
+          } catch (e) {
+            console.error("Failed to extract text for", m.title, e)
+          }
+        }
+
+        return {
+          title: m.title,
+          content,
+          source: urlToExtract || m.title,
+        }
+      })
+    )
 
     // Build document context from backend materials
     const backendDocs = (materials || [])
@@ -301,97 +352,132 @@ function AISynthesisCard({
         source: m.filePath || m.description || m.subject?.name || "College Repository",
       }))
 
-    // Merge both sources — Supabase first (faculty uploads), then backend
     const relevantDocs = [...supabaseDocs, ...backendDocs].slice(0, 8)
+    if (relevantDocs.length === 0) return
 
-    // If no repo sources, skip Gemini call — show 'no sources' state
-    if (relevantDocs.length === 0) {
-      setGeminiLoading(false)
-      setGeminiError(false)
-      setGeminiAnswer(null)
-      setGeminiSources([])
-      return
-    }
-
+    // 1. Try Gemini first
     setGeminiLoading(true)
     setGeminiError(false)
-    setGeminiAnswer(null)
-    setGeminiSources([])
-
-    queryGeminiWithDocuments(query, relevantDocs)
-      .then((res) => {
-        if (res.error || !res.answer) {
-          setGeminiError(true)
-        } else {
-          setGeminiAnswer(res.answer)
-          setGeminiSources(res.sources)
-        }
-      })
-      .catch(() => {
+    try {
+      const res = await queryGeminiWithDocuments(query, relevantDocs)
+      if (res.error || !res.answer) {
         setGeminiError(true)
-      })
-      .finally(() => setGeminiLoading(false))
-  }, [query, supabaseMaterials, materials])
+      } else {
+        setGeminiAnswer(res.answer)
+        setGeminiSources(res.sources)
+        setMessages([{ role: 'ai', text: res.answer }])
+        setGeminiLoading(false)
+        return // Success — done
+      }
+    } catch {
+      setGeminiError(true)
+    }
+    setGeminiLoading(false)
 
-  // 2. Call n8n workflow as fallback
-  useEffect(() => {
-    if (!query) return
-    if (!geminiError) return // Only call if Gemini failed
-
+    // 2. Fallback: n8n
     setN8nLoading(true)
-    setN8nError(false)
-    setN8nAnswer(null)
-
-    n8nChat(query)
-      .then((res) => {
-        if (res.error || !res.output) {
-          setN8nError(true)
-        } else {
-          setN8nAnswer(res.output)
-        }
-      })
-      .catch(() => {
+    try {
+      const res = await n8nChat(query)
+      if (res.error || !res.output) {
         setN8nError(true)
-      })
-      .finally(() => setN8nLoading(false))
-  }, [query, geminiError])
+      } else {
+        setN8nAnswer(res.output)
+        setN8nLoading(false)
+        return
+      }
+    } catch {
+      setN8nError(true)
+    }
+    setN8nLoading(false)
 
-  // 3. Call backend /ai/explain as fallback when n8n fails
-  useEffect(() => {
-    // Only call fallback if n8n has finished and failed
-    if (n8nLoading || !n8nError) return
-    if (!bestSubject || !query) return
-
-    setFallbackLoading(true)
-    setFallbackError(false)
-    setFallbackAnswer(null)
-    setScholarLink(null)
-
-    aiExplain(query, bestSubject.id)
-      .then((res) => {
+    // 3. Fallback: backend AI explain
+    if (bestSubject) {
+      setFallbackLoading(true)
+      try {
+        const res = await aiExplain(query, bestSubject.id)
         if (res.error) {
           setFallbackError(true)
         } else {
           setFallbackAnswer(res.answer || res.message || null)
           setScholarLink(res.scholarLink || null)
         }
-      })
-      .catch(() => setFallbackError(true))
-      .finally(() => setFallbackLoading(false))
-  }, [query, bestSubject, n8nLoading, n8nError])
+      } catch {
+        setFallbackError(true)
+      }
+      setFallbackLoading(false)
+    }
+  }, [query, supabaseMaterials, materials, bestSubject])
 
-  // Derived: the best available answer (prioritizes Gemini)
+  // Chat Submission Handler
+  const handleChat = async () => {
+    if (!chatInput.trim() || chatLoading) return
+    const userText = chatInput.trim()
+    setChatInput("")
+
+    const newMessages: { role: 'user' | 'ai', text: string }[] = [...messages, { role: 'user', text: userText }]
+    setMessages(newMessages)
+    setChatLoading(true)
+
+    // Rebuild context with real text
+    const supabaseDocsRaw = (supabaseMaterials || [])
+      .filter((m) => scoreSupabaseMaterial(m, query) > 20)
+      .slice(0, 5)
+
+    const supabaseDocs = await Promise.all(
+      supabaseDocsRaw.map(async (m) => {
+        let content = [m.description, m.subject, (m.tags || []).join(", ")].filter(Boolean).join(" — ")
+        const urlToExtract = m.file_url || m.external_url
+        if (urlToExtract && (urlToExtract.toLowerCase().endsWith('.pdf') || urlToExtract.includes('supabase'))) {
+          console.log(`[SmartSearch Chat] Attempting to extract text from: ${m.title} at ${urlToExtract}`)
+          try {
+            const extractRes = await fetch(`/api/extract-text?url=${encodeURIComponent(urlToExtract)}`)
+            console.log(`[SmartSearch Chat] extract-text response status: ${extractRes.status}`)
+            if (extractRes.ok) {
+              const data = await extractRes.json()
+              if (data.text) {
+                console.log(`[SmartSearch Chat] Successfully extracted ${data.text.length} characters of text for ${m.title}`)
+                // Prepend real text, limit to ~8000 chars to avoid token limits per doc
+                content = `[DOCUMENT CONTENT]\n${data.text.substring(0, 8000)}\n\n[METADATA]\n${content}`
+              }
+            } else {
+              console.warn(`[SmartSearch Chat] Failed extract-text API for ${m.title}: ${extractRes.statusText}`)
+            }
+          } catch (e) {
+            console.error("Failed to extract text for", m.title, e)
+          }
+        }
+        return { title: m.title, content, source: urlToExtract || m.title }
+      })
+    )
+    const backendDocs = (materials || [])
+      .filter((m) => scoreRelevance(m, query) > 20)
+      .slice(0, 5)
+      .map((m) => ({ title: m.description || m.filePath || "Untitled", content: [m.content, m.description, m.subject?.name].filter(Boolean).join(" — "), source: m.filePath || m.description || m.subject?.name || "College Repository" }))
+    const relevantDocs = [...supabaseDocs, ...backendDocs].slice(0, 8)
+
+    try {
+      const res = await queryGeminiWithDocuments(query, relevantDocs, newMessages)
+      if (!res.error && res.answer) {
+        setMessages(prev => [...prev, { role: 'ai', text: res.answer }])
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', text: "Sorry, I couldn't generate a response based on the documents." }])
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: 'ai', text: "Error communicating with AI services." }])
+    }
+    setChatLoading(false)
+  }
+
+  // Derived state
   const aiAnswer = geminiAnswer || n8nAnswer || fallbackAnswer
-  const aiLoading = geminiLoading || (geminiError && n8nLoading) || (geminiError && n8nError && fallbackLoading)
-  const aiError = geminiError && n8nError && fallbackError
+  const aiLoading = geminiLoading || n8nLoading || fallbackLoading
+  const aiError = synthesisRequested && !aiLoading && !aiAnswer
   const answerSource = geminiAnswer ? "Gemini AI" : n8nAnswer ? "n8n Workflow" : fallbackAnswer ? "Backend AI" : null
 
-  // Derive related subjects from matched materials
+  // Derive related subjects
   const relatedSubjects = Array.from(
     new Set(materials.map((m) => m.subject?.name).filter(Boolean))
   ).slice(0, 6)
-
-  // Top materials for the repository section
   const topMaterials = materials.slice(0, 5)
 
   return (
@@ -406,7 +492,9 @@ function AISynthesisCard({
               AI Knowledge Synthesis
             </h2>
             <p className="text-xs text-muted-foreground">
-              Searching your college repository for relevant materials
+              {hasRepoSources && !materialsLoading
+                ? `${totalRepoSources} document${totalRepoSources !== 1 ? "s" : ""} found — click AI Synthesis to analyze`
+                : "Searching your college repository for relevant materials"}
             </p>
           </div>
         </div>
@@ -421,7 +509,7 @@ function AISynthesisCard({
           {hasRepoSources ? (
             <>
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-emerald-300">
                   Found {totalRepoSources} source{totalRepoSources !== 1 ? "s" : ""} in College Repository
                 </p>
@@ -448,15 +536,94 @@ function AISynthesisCard({
         </div>
       )}
 
-      {/* AI-generated explanation */}
+      {/* Show matched documents FIRST (always) */}
+      {!materialsLoading && hasRepoSources && (
+        <div className="space-y-4 mb-4">
+          {/* Faculty uploaded materials */}
+          {repoSupabaseDocs.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Upload className="h-3 w-3" />
+                Matched Documents ({repoSupabaseDocs.length})
+              </h4>
+              <div className="space-y-2">
+                {repoSupabaseDocs.slice(0, 5).map((mat) => (
+                  <div
+                    key={mat.id}
+                    className="group flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-2.5 hover:border-emerald-500/20 transition-all cursor-pointer"
+                    onClick={() => {
+                      const url = mat.file_url || mat.external_url
+                      if (url) window.open(url, "_blank", "noopener,noreferrer")
+                    }}
+                  >
+                    <GraduationCap className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">
+                        {mat.title}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {mat.faculty_name || "Faculty"} • {mat.subject} • {mat.type}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]">
+                      Faculty Upload
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Backend materials */}
+          {repoBackendDocs.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                <FileText className="h-3 w-3" />
+                Repository Materials ({repoBackendDocs.length})
+              </h4>
+              <div className="flex flex-col gap-1.5">
+                {repoBackendDocs.slice(0, 4).map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setViewerMaterial(m)}
+                    className="flex items-center gap-2 text-primary/80 transition-colors hover:text-primary text-left rounded-lg border border-border bg-secondary/20 px-3 py-2"
+                  >
+                    <FileText className="h-4 w-4 shrink-0" />
+                    <span className="text-xs line-clamp-1 flex-1">
+                      {m.description || m.filePath} — {m.subject?.name}
+                    </span>
+                    <Eye className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI SYNTHESIS BUTTON — the main CTA */}
+          {!synthesisRequested && (
+            <div className="flex justify-center pt-2">
+              <Button
+                onClick={handleSynthesize}
+                className="gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: "linear-gradient(135deg, oklch(0.55 0.20 250), oklch(0.50 0.22 280))",
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                AI Synthesis — Analyze {totalRepoSources} Document{totalRepoSources !== 1 ? "s" : ""}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AI Synthesis results (only after user clicks) */}
       <div className="space-y-4 text-sm leading-relaxed text-secondary-foreground">
-        {(aiLoading || materialsLoading) && (
+        {materialsLoading && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4 animate-pulse text-primary" />
-              <span className="text-xs">
-                AI is analyzing your query across the college repository...
-              </span>
+              <span className="text-xs">Searching college repository for documents...</span>
             </div>
             <div className="space-y-2">
               <div className="h-4 w-full animate-pulse rounded bg-secondary/50" />
@@ -466,8 +633,8 @@ function AISynthesisCard({
           </div>
         )}
 
-        {/* NO SOURCES state — clear message for demo */}
-        {!aiLoading && !materialsLoading && !hasRepoSources && (
+        {/* NO SOURCES state */}
+        {!materialsLoading && !hasRepoSources && (
           <div className="text-center py-4">
             <FolderOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
             <h3 className="text-sm font-medium text-muted-foreground mb-1">
@@ -480,13 +647,31 @@ function AISynthesisCard({
           </div>
         )}
 
-        {/* HAS SOURCES + AI answer */}
-        {!aiLoading && !materialsLoading && hasRepoSources && aiAnswer && (
-          <div className="space-y-4">
+        {/* AI Loading state (after button click) */}
+        {synthesisRequested && aiLoading && (
+          <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-xs font-medium text-primary">
+                AI is reading and analyzing {totalRepoSources} document{totalRepoSources !== 1 ? "s" : ""}...
+              </span>
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 w-full animate-pulse rounded bg-primary/10" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-primary/10" />
+              <div className="h-4 w-4/6 animate-pulse rounded bg-primary/10" />
+            </div>
+          </div>
+        )}
+
+        {/* AI Answer (after synthesis complete) */}
+        {synthesisRequested && !aiLoading && aiAnswer && (
+          <div className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
             <div>
-              <div className="mb-1.5 flex items-center gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  AI Overview — Based on College Repository
+              <div className="mb-2 flex items-center gap-2">
+                <Bot className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  AI Synthesis — Based on {totalRepoSources} Document{totalRepoSources !== 1 ? "s" : ""}
                 </h3>
                 {answerSource && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
@@ -498,43 +683,21 @@ function AISynthesisCard({
               <FormattedMarkdown text={aiAnswer} />
             </div>
 
-            {/* Show source documents when Gemini is used */}
+            {/* Gemini cited sources */}
             {geminiAnswer && geminiSources.length > 0 && (
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-emerald-500/20 pt-3">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  Sources from College Repository
+                  Cited Sources
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {geminiSources.map((source, idx) => {
                     const material = supabaseMaterials.find(
                       (m) => m.file_url === source || m.external_url === source || m.title === source
                     )
                     return (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2"
-                      >
-                        <FileText className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {material?.title || source}
-                          </p>
-                          {material && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Uploaded by {material.faculty_name || "Faculty"} • {material.subject}
-                            </p>
-                          )}
-                        </div>
-                        {material?.file_url && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="shrink-0 h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => window.open(material.file_url!, "_blank", "noopener,noreferrer")}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                      <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <FileText className="h-3 w-3 shrink-0 text-emerald-400" />
+                        <span className="truncate">{material?.title || source}</span>
                       </div>
                     )
                   })}
@@ -542,65 +705,87 @@ function AISynthesisCard({
               </div>
             )}
 
-            {/* Show matched Supabase materials as sources even if Gemini didn't cite them */}
-            {repoSupabaseDocs.length > 0 && (
-              <div className="border-t border-border pt-4">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Upload className="h-3 w-3" />
-                  Faculty Uploaded Materials
-                </h4>
-                <div className="space-y-2">
-                  {repoSupabaseDocs.slice(0, 5).map((mat) => (
-                    <div
-                      key={mat.id}
-                      className="group flex items-start gap-2 rounded-lg border border-border bg-secondary/20 p-2.5 hover:border-emerald-500/20 transition-all cursor-pointer"
-                      onClick={() => {
-                        const url = mat.file_url || mat.external_url
-                        if (url) window.open(url, "_blank", "noopener,noreferrer")
-                      }}
-                    >
-                      <GraduationCap className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {mat.title}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {mat.faculty_name || "Faculty"} • {mat.subject} • {mat.type}
-                        </p>
+            {/* NotebookLM-like Chat Interface */}
+            {geminiAnswer && (
+              <div className="mt-6 border-t border-emerald-500/20 pt-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Chat with Documents
+                  </h4>
+                  <span className="text-[10px] text-muted-foreground">Ask follow-up questions</span>
+                </div>
+
+                {/* Chat History */}
+                <div className="space-y-3 mb-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                  {messages.slice(1).map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === 'user'
+                        ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                        : 'bg-emerald-500/10 text-emerald-100 rounded-tl-sm border border-emerald-500/20'
+                        }`}>
+                        {msg.role === 'ai' ? <FormattedMarkdown text={msg.text} /> : msg.text}
                       </div>
-                      <Badge variant="outline" className="shrink-0 border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px]">
-                        Faculty Upload
-                      </Badge>
                     </div>
                   ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-500/10 px-4 py-3 border border-emerald-500/20">
+                        <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleChat()
+                    }}
+                    placeholder="Ask about these documents..."
+                    disabled={chatLoading}
+                    className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/5 py-2.5 pl-4 pr-12 text-sm text-foreground focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-muted-foreground/50 disabled:opacity-50"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleChat}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="absolute right-1 top-1 h-8 w-8 rounded-lg bg-emerald-600 hover:bg-emerald-500"
+                  >
+                    <Send className="h-3.5 w-3.5 text-white" />
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* HAS SOURCES but Gemini is loading */}
-        {!aiLoading && !materialsLoading && hasRepoSources && !aiAnswer && !aiError && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Sparkles className="h-4 w-4 animate-pulse text-primary" />
-            <span className="text-xs">Preparing AI overview from repository sources...</span>
-          </div>
-        )}
-
-        {!aiLoading && !materialsLoading && hasRepoSources && aiError && (
-          <div>
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              AI Overview
+        {/* AI Error */}
+        {synthesisRequested && !aiLoading && aiError && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
+              AI Synthesis Unavailable
             </h3>
-            <p className="text-muted-foreground italic">
-              AI synthesis is temporarily unavailable. Repository sources are listed above.
+            <p className="text-xs text-muted-foreground">
+              AI synthesis is temporarily unavailable. You can still view the documents listed above.
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 text-xs"
+              onClick={handleSynthesize}
+            >
+              Retry Synthesis
+            </Button>
           </div>
         )}
 
         {expanded && (
           <>
-            {/* Related Subjects */}
             {relatedSubjects.length > 0 && (
               <div>
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -620,7 +805,6 @@ function AISynthesisCard({
               </div>
             )}
 
-            {/* Scholar link */}
             {scholarLink && (
               <div>
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -635,29 +819,6 @@ function AISynthesisCard({
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   <span className="text-xs">Google Scholar Results</span>
                 </a>
-              </div>
-            )}
-
-            {/* Citations from backend materials */}
-            {topMaterials.length > 0 && (
-              <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Backend Sources
-                </h3>
-                <div className="flex flex-col gap-1.5">
-                  {topMaterials.slice(0, 4).map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => setViewerMaterial(m)}
-                      className="flex items-center gap-2 text-primary/80 transition-colors hover:text-primary text-left"
-                    >
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                      <span className="text-xs line-clamp-1">
-                        {m.description || m.filePath} - {m.subject.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
           </>
@@ -682,11 +843,13 @@ function AISynthesisCard({
       )}
 
       <p className="mt-3 text-[11px] italic text-muted-foreground/60">
-        {hasRepoSources && answerSource
+        {synthesisRequested && answerSource
           ? `Powered by ${answerSource} — ${totalRepoSources} college repository source${totalRepoSources !== 1 ? "s" : ""} analyzed`
-          : !hasRepoSources && !materialsLoading
-            ? "No college repository sources available for this topic"
-            : "Searching college repository..."}
+          : hasRepoSources && !materialsLoading
+            ? `${totalRepoSources} document${totalRepoSources !== 1 ? "s" : ""} ready for AI synthesis`
+            : !hasRepoSources && !materialsLoading
+              ? "No college repository sources available for this topic"
+              : "Searching college repository..."}
       </p>
 
       {/* In-app material viewer */}

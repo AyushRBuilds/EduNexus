@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { addMaterial } from "@/lib/api/local-store"
+import fs from 'fs/promises'
+import path from 'path'
 
 // Use service-role key for server-side storage operations
 function getSupabaseAdmin() {
@@ -114,11 +116,24 @@ export async function POST(req: NextRequest) {
     // ----- Supabase NOT available: use in-memory store -----
     console.log("[faculty-upload] Supabase not configured — storing in memory")
 
-    // For files, create a local data URL so the material is "viewable"
+    // For files, physically save them to the public directory so the text extractor can read them later
     let fileUrl: string | null = null
     if (file && file.size > 0) {
-      // Store a reference (can't persist full file in memory easily, but store metadata)
-      fileUrl = `local://uploaded/${subject.replace(/\s+/g, "_")}/${file.name}`
+      const safeSubject = subject.replace(/\s+/g, "_")
+      const fileName = file.name
+      const relativePath = `uploaded/${safeSubject}/${fileName}`
+      const absolutePath = path.join(process.cwd(), 'public', 'uploaded', safeSubject, fileName)
+
+      // Ensure directory exists
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true })
+
+      // Write file buffer to disk
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      await fs.writeFile(absolutePath, buffer)
+
+      // Route reference for extract-text to consume
+      fileUrl = `local://${relativePath}`
     }
 
     const material = addMaterial({

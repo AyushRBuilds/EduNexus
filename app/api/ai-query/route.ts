@@ -34,7 +34,7 @@ let hfIdx = 0
 /*  Try Gemini (round-robin)                                           */
 /* ------------------------------------------------------------------ */
 
-async function tryGemini(query: string, context?: string): Promise<string | null> {
+async function tryGemini(query: string, context?: string, history?: any[]): Promise<string | null> {
     for (let attempt = 0; attempt < GEMINI_KEYS.length; attempt++) {
         const idx = geminiIdx % GEMINI_KEYS.length
         geminiIdx = (geminiIdx + 1) % GEMINI_KEYS.length
@@ -45,7 +45,20 @@ async function tryGemini(query: string, context?: string): Promise<string | null
             const genAI = new GoogleGenerativeAI(key)
             const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-            let prompt = `You are an expert educational assistant. Provide a comprehensive, well-structured answer.
+            let prompt = `You are an expert educational assistant.`
+
+            if (context) {
+                prompt += `
+
+CRITICAL INSTRUCTION: You must answer the user's question STRICTLY and EXCLUSIVELY using the information provided in the "Additional Context" below. 
+Do not include any outside knowledge, facts, or external information that is not present in the context documents. 
+If the context does not contain enough information to fully answer the question, state clearly what you cannot answer based on the provided documents.
+
+Question: ${query}
+
+Additional Context:\n${context}`
+            } else {
+                prompt += ` Provide a comprehensive, well-structured answer.
 
 Question: ${query}
 
@@ -54,23 +67,43 @@ Guidelines:
 - Use examples where appropriate
 - Structure the answer logically
 - Be concise but thorough`
-
-            if (context) {
-                prompt += `\n\nAdditional Context:\n${context}`
             }
 
-            const result = await model.generateContent({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
-                safetySettings: [
-                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-                ],
-            })
+            // Clean up history to match required Gemini format (role must be 'user' or 'model')
+            const geminiHistory = Array.isArray(history) ? history.map((msg: any) => ({
+                role: msg.role === 'ai' || msg.role === 'model' ? 'model' : 'user',
+                parts: [{ text: msg.text || msg.parts?.[0]?.text || '' }]
+            })) : undefined
 
-            const answer = result.response.text()
+            let answer = '';
+            // If history is provided and has items, use startChat
+            if (geminiHistory && geminiHistory.length > 0) {
+                const chat = model.startChat({
+                    history: geminiHistory,
+                    generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+                    safetySettings: [
+                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                    ],
+                });
+                const result = await chat.sendMessage([{ text: prompt }]);
+                answer = result.response.text();
+            } else {
+                // Otherwise do single shot
+                const result = await model.generateContent({
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+                    safetySettings: [
+                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                    ],
+                })
+                answer = result.response.text()
+            }
             if (answer) {
                 console.log(`[ai-query] Gemini key ${idx + 1} succeeded, length: ${answer.length}`)
                 return answer
@@ -89,8 +122,23 @@ Guidelines:
 /*  Try Hugging Face via Together provider (confirmed working)         */
 /* ------------------------------------------------------------------ */
 
-async function tryHuggingFace(query: string, context?: string): Promise<string | null> {
+async function tryHuggingFace(query: string, context?: string, history?: any[]): Promise<string | null> {
     const userMsg = context ? `Context:\n${context}\n\nQuestion: ${query}` : query
+    const systemPrompt = context
+        ? 'You are an expert educational assistant. CRITICAL INSTRUCTION: You must answer questions STRICTLY and EXCLUSIVELY based on the provided Context. Do not include external knowledge. If the context is insufficient, state so clearly.'
+        : 'You are an expert educational assistant. Be clear, detailed, and academically rigorous. Provide well-structured answers with examples where appropriate.'
+
+    // Format history for Llama 3 API (roles: 'system', 'user', 'assistant')
+    const hfHistory = Array.isArray(history) ? history.map((msg: any) => ({
+        role: msg.role === 'ai' || msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.text || msg.content || msg.parts?.[0]?.text || ''
+    })) : []
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        ...hfHistory,
+        { role: 'user', content: userMsg }
+    ]
 
     for (let attempt = 0; attempt < HF_TOKENS.length; attempt++) {
         const idx = hfIdx % HF_TOKENS.length
@@ -108,10 +156,7 @@ async function tryHuggingFace(query: string, context?: string): Promise<string |
                 },
                 body: JSON.stringify({
                     model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-                    messages: [
-                        { role: 'system', content: 'You are an expert educational assistant. Be clear, detailed, and academically rigorous. Provide well-structured answers with examples where appropriate.' },
-                        { role: 'user', content: userMsg }
-                    ],
+                    messages: messages,
                     max_tokens: 1024,
                     temperature: 0.7,
                 }),
@@ -144,7 +189,7 @@ async function tryHuggingFace(query: string, context?: string): Promise<string |
 
 export async function POST(request: NextRequest) {
     try {
-        const { query, context } = await request.json()
+        const { query, context, history } = await request.json()
 
         if (!query || typeof query !== 'string') {
             return NextResponse.json({ answer: 'Invalid query', error: 'INVALID_INPUT' }, { status: 400 })
@@ -152,7 +197,7 @@ export async function POST(request: NextRequest) {
 
         // 1. Try Gemini first
         if (GEMINI_KEYS.length > 0) {
-            const geminiAnswer = await tryGemini(query, context)
+            const geminiAnswer = await tryGemini(query, context, history)
             if (geminiAnswer) {
                 return NextResponse.json({ answer: geminiAnswer, sources: [], provider: 'gemini' })
             }
@@ -161,7 +206,7 @@ export async function POST(request: NextRequest) {
         // 2. Fallback to Hugging Face
         if (HF_TOKENS.length > 0) {
             console.log('[ai-query] All Gemini keys exhausted, trying Hugging Face...')
-            const hfAnswer = await tryHuggingFace(query, context)
+            const hfAnswer = await tryHuggingFace(query, context, history)
             if (hfAnswer) {
                 return NextResponse.json({ answer: hfAnswer, sources: [], provider: 'huggingface' })
             }

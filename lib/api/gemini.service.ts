@@ -18,13 +18,14 @@ export interface GeminiResponse {
  */
 export async function queryGemini(
   query: string,
-  context?: string
+  context?: string,
+  history?: any[]
 ): Promise<GeminiResponse> {
   try {
     const res = await fetch('/api/ai-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, context }),
+      body: JSON.stringify({ query, context, history }),
     })
 
     if (!res.ok) {
@@ -64,14 +65,15 @@ export async function queryGeminiWithDocuments(
     title: string
     content: string
     source: string
-  }[]
+  }[],
+  history?: any[]
 ): Promise<GeminiResponse> {
   // Build document context string for the server
   const contextStr = documentContext
     .map((doc, i) => `Document ${i + 1}: "${doc.title}"\n${doc.content.substring(0, 500)}`)
     .join('\n\n')
 
-  const result = await queryGemini(query, contextStr)
+  const result = await queryGemini(query, contextStr, history)
 
   // Try to extract which documents were referenced
   if (result.answer && !result.error) {

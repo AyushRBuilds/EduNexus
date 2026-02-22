@@ -529,7 +529,7 @@ function DraggableMindMapNode({
 /*  Mind Map Container                                                 */
 /* ------------------------------------------------------------------ */
 
-export function StudyMindMap({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string } = {}) {
+export function StudyMindMap({ videoTitle, videoSubject, videoTranscript }: { videoTitle?: string; videoSubject?: string; videoTranscript?: string } = {}) {
   const [nodes, setNodes] = useState<MindNode[]>(() => JSON.parse(JSON.stringify(INITIAL_NODES)))
   const [history, setHistory] = useState<MindNode[][]>([])
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -581,7 +581,7 @@ export function StudyMindMap({ videoTitle, videoSubject }: { videoTitle?: string
     setAiGenerating(true)
     try {
       const prompt = `Generate a mind map structure for the topic: "${videoTitle}"${videoSubject ? ` (Subject: ${videoSubject})` : ""}.
-
+${videoTranscript ? `\nHere is the full lecture transcript to base the mind map on:\n${videoTranscript}\n` : ""}
 Return ONLY a JSON object with this exact structure (no markdown, no code blocks, just raw JSON):
 {
   "center": "Main Topic",
@@ -597,7 +597,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no code blocks
   ]
 }
 
-Create 4-6 branches with 2-3 children each. Make them academically relevant to the topic.`
+Create 4-6 branches with 2-3 children each. Make them academically relevant to the topic.${videoTranscript ? " Base the structure strictly on the transcript content above." : ""}`
 
       const result = await queryGemini(prompt)
       const text = result.answer || ""
@@ -663,7 +663,7 @@ Create 4-6 branches with 2-3 children each. Make them academically relevant to t
     } finally {
       setAiGenerating(false)
     }
-  }, [videoTitle, videoSubject, aiGenerating, pushHistory])
+  }, [videoTitle, videoSubject, videoTranscript, aiGenerating, pushHistory])
 
   /* ---------- drag logic ---------- */
   const handleDragStart = useCallback((id: string, e: React.MouseEvent | React.TouchEvent) => {

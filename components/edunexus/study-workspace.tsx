@@ -665,8 +665,7 @@ function VideoPlayer({
 /*  Transcript                                                         */
 /* ------------------------------------------------------------------ */
 
-function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture | null; currentTime: number; onSeek: (time: number) => void }) {
-  const [transcript, setTranscript] = useState<TranscriptSegment[]>(TRANSCRIPT)
+function TranscriptPanel({ video, currentTime, onSeek, transcript, setTranscript }: { video: VideoLecture | null; currentTime: number; onSeek: (time: number) => void; transcript: TranscriptSegment[]; setTranscript: (t: TranscriptSegment[]) => void }) {
   const [loading, setLoading] = useState(false)
   const [needsGeneration, setNeedsGeneration] = useState(false)
   const activeRef = useRef<HTMLButtonElement>(null)
@@ -679,11 +678,9 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
 
   useEffect(() => {
     if (!video) return
-
-    // For all videos, ask user to generate transcript
     setNeedsGeneration(true)
     setTranscript([])
-  }, [video])
+  }, [video, setTranscript])
 
   const handleGenerateTranscript = async () => {
     if (!video) return
@@ -692,41 +689,41 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
     let isMounted = true
 
     try {
-      const prompt = `Generate a detailed and realistic educational transcript for a video titled "${video.title}" that covers the entire topic in depth.
-              Course: ${video.course}
-              Instructor: ${video.instructor}
-              ${video.description ? `Description: ${video.description}` : ""}
+      // User explicitly requested to transcribe the video with AI (like Whisper)
+      // rather than fetching existing YouTube captions.
+      const res = await fetch('/api/whisper-transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: video.title,
+          course: video.course,
+          instructor: video.instructor,
+          durationSeconds: video.durationSeconds
+        })
+      })
 
-              Output ONLY a valid block of JSON array of objects (generate as many objects as needed to cover the full topic comprehensively). Each object MUST have:
-              - "id": number (e.g. 1, 2, 3...)
-              - "start": number (start time in seconds, starting from 0, e.g. 0, 30, 60...)
-              - "end": number (end time in seconds, e.g. 30, 60, 90...)
-              - "speaker": string (instructor name)
-              - "text": string (the spoken text sentence or paragraph)
+      const data = await res.json()
 
-              Make the text highly relevant to the video title. Do NOT output any markdown blocks like \`\`\`json or \`\`\`, ONLY the raw JSON array.`
-
-      const result = await queryGemini(prompt)
-      let rawJson = result.answer.replace(/```json/gi, '').replace(/```/g, '').trim()
-
-      const jsonStart = rawJson.indexOf('[')
-      const jsonEnd = rawJson.lastIndexOf(']')
-      if (jsonStart !== -1 && jsonEnd !== -1) {
-        rawJson = rawJson.substring(jsonStart, jsonEnd + 1)
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to transcribe audio")
       }
 
-      const parsed = JSON.parse(rawJson) as TranscriptSegment[]
-
-      if (isMounted && Array.isArray(parsed) && parsed.length > 0) {
-        setTranscript(parsed)
+      if (isMounted && data.transcript && Array.isArray(data.transcript) && data.transcript.length > 0) {
+        setTranscript(data.transcript)
       } else {
-        throw new Error("Invalid structure")
+        throw new Error("Invalid or empty AI transcription returned")
       }
-    } catch (err) {
-      console.error("Failed to generate transcript", err)
+    } catch (err: any) {
+      console.error("Failed to transcribe via Whisper AI", err)
       if (isMounted) {
         setTranscript([
-          { id: 1, start: 0, end: 3600, speaker: video.instructor, text: `Welcome to this lecture on ${video.title}. Our AI encountered an error processing the transcript. Please try generating it again later.` }
+          {
+            id: 1,
+            start: 0,
+            end: video.durationSeconds || 3600,
+            speaker: "System",
+            text: `⚠️ Whisper AI Error: ${err.message}. Failed to process the audio stream for this lecture.`
+          }
         ])
       }
     } finally {
@@ -761,17 +758,17 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
                 <Sparkles className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-foreground mb-1">AI Transcript Available</h4>
-                <p className="text-xs text-muted-foreground max-w-[200px]">Generate a full lecture transcript using Gemini AI, or maximize other tabs if you prefer.</p>
+                <h4 className="text-sm font-semibold text-foreground mb-1">Whisper AI Transcription</h4>
+                <p className="text-xs text-muted-foreground max-w-[200px]">Transcribe the lecture audio using Whisper AI to enable contextual study tools.</p>
               </div>
               <Button onClick={handleGenerateTranscript} className="h-8 text-xs px-4" size="sm">
-                Generate Transcript
+                Transcribe Audio
               </Button>
             </div>
           ) : loading ? (
             <div className="flex flex-col items-center justify-center h-full py-12 gap-3 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <p className="text-xs">AI is transcribing lecture...</p>
+              <p className="text-xs">Whisper AI processing audio...</p>
             </div>
           ) : (
             transcript.map((seg) => {
@@ -803,7 +800,7 @@ function TranscriptPanel({ video, currentTime, onSeek }: { video: VideoLecture |
 /*  Chat Tab                                                           */
 /* ------------------------------------------------------------------ */
 
-function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string }) {
+function ChatTab({ videoTitle, videoSubject, videoTranscript }: { videoTitle?: string; videoSubject?: string; videoTranscript?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 1, role: "ai", text: `Hi! I'm your AI study companion for this lecture${videoTitle ? ` on "${videoTitle}"` : ""}. Ask me anything about the concepts covered, request explanations, or I can quiz you on the material.` },
   ])
@@ -827,7 +824,8 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
       const context = [
         videoTitle ? `This is a lecture on: ${videoTitle}` : "",
         videoSubject ? `Subject: ${videoSubject}` : "",
-        "Answer as a helpful tutor. Be concise but thorough. Use examples when helpful.",
+        videoTranscript ? `Here is the full lecture transcript for context:\n${videoTranscript}` : "",
+        "Answer based ONLY on the lecture content provided above. Be concise but thorough. Use examples when helpful.",
       ].filter(Boolean).join("\n")
 
       const result = await queryGemini(question, context)
@@ -845,7 +843,7 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
     } finally {
       setIsTyping(false)
     }
-  }, [input, isTyping, videoTitle, videoSubject])
+  }, [input, isTyping, videoTitle, videoSubject, videoTranscript])
 
   return (
     <div className="flex h-full flex-col">
@@ -908,7 +906,7 @@ function ChatTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubje
 /*  Summary Tab                                                        */
 /* ------------------------------------------------------------------ */
 
-function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSubject?: string }) {
+function SummaryTab({ videoTitle, videoSubject, videoTranscript }: { videoTitle?: string; videoSubject?: string; videoTranscript?: string }) {
   const [summary, setSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
@@ -918,7 +916,7 @@ function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSu
     setLoading(true)
     try {
       const prompt = `Generate a comprehensive study summary for a lecture titled "${videoTitle}"${videoSubject ? ` (Subject: ${videoSubject})` : ""}.
-
+${videoTranscript ? `\nHere is the full lecture transcript to base the summary on:\n${videoTranscript}\n` : ""}
                 Format the summary as:
                 1. **Key Concepts** - List the main concepts covered (4-6 bullet points)
                 2. **Core Definitions** - Important definitions and formulas
@@ -926,7 +924,7 @@ function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSu
                 4. **Study Tips** - 2-3 practical tips for studying this topic
                 5. **Key Takeaways** - 3 most important things to remember
 
-                Be academically rigorous and detailed. Use clear, student-friendly language.`
+                Be academically rigorous and detailed. Use clear, student-friendly language.${videoTranscript ? " Base your summary strictly on the transcript provided above." : ""}`
 
       const result = await queryGemini(prompt)
       setSummary(result.answer || "Could not generate summary.")
@@ -936,7 +934,7 @@ function SummaryTab({ videoTitle, videoSubject }: { videoTitle?: string; videoSu
     } finally {
       setLoading(false)
     }
-  }, [videoTitle, videoSubject])
+  }, [videoTitle, videoSubject, videoTranscript])
 
   return (
     <ScrollArea className="h-full">
@@ -1024,7 +1022,13 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
+  const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Build a plain-text transcript string for AI context
+  const transcriptText = transcript.length > 0
+    ? transcript.map((seg) => `[${formatTime(seg.start)}] ${seg.speaker}: ${seg.text}`).join("\n")
+    : ""
 
   useEffect(() => {
     async function fetchFacultyVideos() {
@@ -1184,7 +1188,7 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
 
             <ResizablePanel defaultSize={35} minSize={20}>
               <div className="h-full flex flex-col bg-card/60">
-                <TranscriptPanel video={selectedLecture} currentTime={currentTime} onSeek={handleSeek} />
+                <TranscriptPanel video={selectedLecture} currentTime={currentTime} onSeek={handleSeek} transcript={transcript} setTranscript={setTranscript} />
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -1236,13 +1240,13 @@ export function StudyWorkspace({ onBack }: { onBack: () => void }) {
                 </Button>
               </div>
               <TabsContent value="chat" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
-                <ChatTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+                <ChatTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} videoTranscript={transcriptText} />
               </TabsContent>
               <TabsContent value="summary" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
-                <SummaryTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+                <SummaryTab videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} videoTranscript={transcriptText} />
               </TabsContent>
               <TabsContent value="mindmap" forceMount className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
-                <StudyMindMap videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} />
+                <StudyMindMap videoTitle={selectedLecture?.title} videoSubject={selectedLecture?.course} videoTranscript={transcriptText} />
               </TabsContent>
             </Tabs>
           </div>
