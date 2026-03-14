@@ -2,9 +2,7 @@
 
 # Hey there! 👋 I'm Ayush Redekar
 
-### `Student` · `Tech Explorer` · `Future Creator`
-
-*Documenting the journey from scratch — one build at a time.* 🚀
+<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=70A5FD&center=true&vCenter=true&random=false&width=500&lines=Student+%7C+Tech+Explorer+%7C+Future+Creator;Full-Stack+Developer+in+the+Making;Building+in+Public+%F0%9F%9A%80;One+Commit+at+a+Time!" alt="Animated taglines: Student | Tech Explorer | Future Creator · Full-Stack Developer in the Making · Building in Public · One Commit at a Time" /></a>
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ayush-redekar-508a2a363/)
 [![X](https://img.shields.io/badge/X-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/AyushrBuilds)
@@ -22,6 +20,7 @@
 - 🔭 Currently working on [**EduNexus**](https://github.com/AyushRBuilds/EduNexus) — an AI-powered Smart Campus Knowledge Engine
 - 🌱 Learning **Full-Stack Development**, **AI Integration**, and **Cloud Deployment**
 - ✍️ I write tech blogs on [Hashnode](https://launch-log.hashnode.dev/), [Medium](https://medium.com/@redekarayush07), and [LinkedIn](https://www.linkedin.com/in/ayush-redekar-508a2a363/recent-activity/articles/)
+- 💬 Ask me about **Next.js, React, TypeScript, Tailwind CSS, Supabase**
 - 🎯 Goal: Build products that solve real problems and document every step of the journey
 
 ---
@@ -100,6 +99,9 @@
     <td width="50%">
       <h3 align="center">✍️ Tech Blogs</h3>
       <p align="center">
+        <a href="https://github.com/AyushRBuilds/Tech-blogs">
+          <img src="https://img.shields.io/badge/View_Repo-181717?style=for-the-badge&logo=github&logoColor=white" />
+        </a>
         <a href="https://launch-log.hashnode.dev/">
           <img src="https://img.shields.io/badge/Hashnode-2962FF?style=for-the-badge&logo=hashnode&logoColor=white" />
         </a>
@@ -124,6 +126,10 @@
 <br/>
 
 <img src="https://github-readme-streak-stats.herokuapp.com/?user=AyushRBuilds&theme=tokyonight&hide_border=true" alt="GitHub Streak" />
+
+<br/>
+
+<img src="https://github-readme-activity-graph.vercel.app/graph?username=AyushRBuilds&theme=tokyo-night&hide_border=true&area=true" alt="GitHub Activity Graph" width="95%" />
 
 </div>
 
