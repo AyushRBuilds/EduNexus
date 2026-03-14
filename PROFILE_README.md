@@ -21,7 +21,6 @@
 - 🤖 Also building [**Karrar AI**](https://github.com/Ayush-5107/Karrar-ai) — a modern AI-powered conversational web app
 - 🌱 Learning **Full-Stack Development**, **AI Integration**, and **Cloud Deployment**
 - ✍️ I write tech blogs on [Hashnode](https://launch-log.hashnode.dev/), [Medium](https://medium.com/@redekarayush07), and [LinkedIn](https://www.linkedin.com/in/ayush-redekar-508a2a363/recent-activity/articles/)
-- 💬 Ask me about **Next.js, React, TypeScript, Tailwind CSS, Supabase**
 - 🎯 Goal: Build products that solve real problems and document every step of the journey
 
 ---
@@ -48,7 +47,6 @@
 **AI & APIs**
 
 ![Oracle Cloud AI](https://img.shields.io/badge/Oracle_Cloud_AI-F80000?style=for-the-badge&logo=oracle&logoColor=white)
-![Prompt Engineering](https://img.shields.io/badge/Prompt_Engineering-412991?style=for-the-badge&logo=openai&logoColor=white)
 ![REST APIs](https://img.shields.io/badge/REST_APIs-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 
 **Developer Tools**
