@@ -56,6 +56,7 @@
 ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
 ![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
 ![VS Code](https://img.shields.io/badge/VS_Code-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)
+![Jupyter Notebook](https://img.shields.io/badge/Jupyter-F37626?style=for-the-badge&logo=jupyter&logoColor=white)
 
 </div>
 
@@ -77,17 +78,6 @@
       </p>
       <p align="center">AI-Powered Smart Campus Knowledge Engine built with Next.js, TypeScript, Tailwind CSS, Supabase & Google Generative AI. Centralizes campus information for instant, accurate answers.</p>
     </td>
-    <td width="50%">
-      <h3 align="center">🌐 Landing Pages</h3>
-      <p align="center">
-        <a href="https://github.com/AyushRBuilds/1st-2nd-Landing-Page">
-          <img src="https://img.shields.io/badge/View_Repo-181717?style=for-the-badge&logo=github&logoColor=white" />
-        </a>
-      </p>
-      <p align="center">Responsive landing pages built from scratch with HTML, CSS & JavaScript — my first steps into web development.</p>
-    </td>
-  </tr>
-  <tr>
     <td width="50%">
       <h3 align="center">🤖 Karrar AI</h3>
       <p align="center">
@@ -116,6 +106,15 @@
         </a>
       </p>
       <p align="center">Writing about tech, development, and my learning journey across Hashnode, Medium & LinkedIn.</p>
+    </td>
+    <td width="50%">
+      <h3 align="center">🐍 Python Projects</h3>
+      <p align="center">
+        <a href="https://github.com/AyushRBuilds/Python">
+          <img src="https://img.shields.io/badge/View_Repo-181717?style=for-the-badge&logo=github&logoColor=white" />
+        </a>
+      </p>
+      <p align="center">A collection of Python projects and scripts covering core concepts, automation, and problem-solving.</p>
     </td>
   </tr>
 </table>
