@@ -2,7 +2,7 @@
 
 # Hey there! 👋 I'm Ayush Redekar
 
-<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=70A5FD&center=true&vCenter=true&random=false&width=500&lines=Student+%7C+Tech+Explorer+%7C+Future+Creator;Full-Stack+Developer+in+the+Making;Building+in+Public+%F0%9F%9A%80;One+Commit+at+a+Time!" alt="Typing SVG" /></a>
+<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=70A5FD&center=true&vCenter=true&random=false&width=500&lines=Student+%7C+Tech+Explorer+%7C+Future+Creator;Full-Stack+Developer+in+the+Making;Building+in+Public+%F0%9F%9A%80;One+Commit+at+a+Time!" alt="Animated taglines: Student | Tech Explorer | Future Creator · Full-Stack Developer in the Making · Building in Public · One Commit at a Time" /></a>
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ayush-redekar-508a2a363/)
 [![X](https://img.shields.io/badge/X-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/AyushrBuilds)
