@@ -18,6 +18,7 @@
 - 📍 Based in **Thane, Mumbai, Maharashtra, India**
 - 🎓 Student with a passion for building real-world tech products
 - 🔭 Currently working on [**EduNexus**](https://github.com/AyushRBuilds/EduNexus) — an AI-powered Smart Campus Knowledge Engine
+- 🤖 Also building [**Karrar AI**](https://github.com/Ayush-5107/Karrar-ai) — a modern AI-powered conversational web app
 - 🌱 Learning **Full-Stack Development**, **AI Integration**, and **Cloud Deployment**
 - ✍️ I write tech blogs on [Hashnode](https://launch-log.hashnode.dev/), [Medium](https://medium.com/@redekarayush07), and [LinkedIn](https://www.linkedin.com/in/ayush-redekar-508a2a363/recent-activity/articles/)
 - 💬 Ask me about **Next.js, React, TypeScript, Tailwind CSS, Supabase**
@@ -88,6 +89,18 @@
   </tr>
   <tr>
     <td width="50%">
+      <h3 align="center">🤖 Karrar AI</h3>
+      <p align="center">
+        <a href="https://github.com/Ayush-5107/Karrar-ai">
+          <img src="https://img.shields.io/badge/View_Repo-181717?style=for-the-badge&logo=github&logoColor=white" />
+        </a>
+        <a href="https://karrar-ai.vercel.app/">
+          <img src="https://img.shields.io/badge/Live_Demo-000000?style=for-the-badge&logo=vercel&logoColor=white" />
+        </a>
+      </p>
+      <p align="center">A modern AI-powered conversational web app built with React, Vite & JavaScript. Chat with an intelligent AI assistant in a sleek, responsive interface.</p>
+    </td>
+    <td width="50%">
       <h3 align="center">🐍 Python Projects</h3>
       <p align="center">
         <a href="https://github.com/AyushRBuilds/Python">
@@ -96,6 +109,8 @@
       </p>
       <p align="center">Collection of Python projects and experiments, exploring the fundamentals and beyond.</p>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <h3 align="center">✍️ Tech Blogs</h3>
       <p align="center">
